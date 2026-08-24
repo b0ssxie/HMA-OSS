@@ -385,8 +385,101 @@ function generatePreset(packages, metadata) {
   return preset;
 }
 
+function generateAppScope() {
+  // Common target apps that should see only the whitelist (clean device simulation)
+  return {
+    useWhitelist: false,
+    excludeSystemApps: true,
+    hideInstallationSource: false,
+    hideSystemInstallationSource: false,
+    excludeTargetInstallationSource: false,
+    invertActivityLaunchProtection: false,
+    excludeVoldIsolation: false,
+    restrictedZygotePermissions: [],
+    applyTemplates: ["App Store Whitelist"],
+    applyPresets: [],
+    applySettingTemplates: [],
+    applySettingsPresets: [],
+    extraAppList: [],
+    extraOppositeAppList: [],
+  };
+}
+
 function generateHMAConfig(allPackages) {
   // Generate a proper JsonConfig that can be imported via HMA-OSS "还原配置"
+  const scope = {
+    // 银行/金融类 - 检测最严格
+    "com.icbc": generateAppScope(),
+    "com.ccb.fun": generateAppScope(),
+    "com.bankcomm": generateAppScope(),
+    "com.chinamworld.main": generateAppScope(),
+    "com.cmbchina.ccd": generateAppScope(),
+    "com.spdb.mobilebank": generateAppScope(),
+    "com.citicbank.mobilebank": generateAppScope(),
+    "com.cmbc.ms": generateAppScope(),
+    "com.hxb.mobilebank": generateAppScope(),
+    "com.cgbchina.mobilebank": generateAppScope(),
+    "com.cebbank.mobile": generateAppScope(),
+    "com.bankofchina": generateAppScope(),
+    "com.cmbchina.uia": generateAppScope(),
+    "com.abchina.mobilebank": generateAppScope(),
+    "com.pingan.bank": generateAppScope(),
+    "com.eg.android.AlipayGphone": generateAppScope(),
+    "com.tenpay.android": generateAppScope(),
+    "com.unionpay": generateAppScope(),
+    "com.unionpay.mobile": generateAppScope(),
+    // 社交/通讯
+    "com.tencent.mm": generateAppScope(),
+    "com.tencent.mobileqq": generateAppScope(),
+    "com.sina.weibo": generateAppScope(),
+    "com.tencent.weishi": generateAppScope(),
+    // 电商/支付
+    "com.taobao.taobao": generateAppScope(),
+    "com.tmall.wireless": generateAppScope(),
+    "com.jingdong.app.mall": generateAppScope(),
+    "com.xunmeng.pinduoduo": generateAppScope(),
+    "com.meituan.android": generateAppScope(),
+    "com.dianping.v1": generateAppScope(),
+    "com.sdu.didi.psnger": generateAppScope(),
+    "com.ele.me": generateAppScope(),
+    // 游戏/娱乐
+    "com.tencent.tmgp.sgame": generateAppScope(),
+    "com.tencent.tmgp.pubgmhd": generateAppScope(),
+    "com.netease.mc": generateAppScope(),
+    "com.miHoYo.Yuanshen": generateAppScope(),
+    "com.mihoyo.hkrpg": generateAppScope(),
+    "com.tencent.tmgp.cod": generateAppScope(),
+    "com.activision.callofduty.shooter": generateAppScope(),
+    "com.tencent.qqgamecenter": generateAppScope(),
+    "com.netease.gamecenter": generateAppScope(),
+    "com.qiyi.video": generateAppScope(),
+    "com.youku.phone": generateAppScope(),
+    "com.tencent.qqlive": generateAppScope(),
+    "tv.danmaku.bili": generateAppScope(),
+    "com.ss.android.ugc.aweme": generateAppScope(),
+    "com.kuaishou.nebula": generateAppScope(),
+    "com.smile.gifmaker": generateAppScope(),
+    // 出行/旅游
+    "ctrip.android.view": generateAppScope(),
+    "com.Qunar": generateAppScope(),
+    "com.MobileTicket": generateAppScope(),
+    "com.ctsi": generateAppScope(),
+    "com.csair": generateAppScope(),
+    "com.airchina": generateAppScope(),
+    "com.tongcheng.android": generateAppScope(),
+    // 工具/系统
+    "com.ucmobile": generateAppScope(),
+    "com.qq.browser": generateAppScope(),
+    "com.baidu.searchbox": generateAppScope(),
+    "com.baidu.BaiduMap": generateAppScope(),
+    "com.autonavi.minimap": generateAppScope(),
+    "com.tencent.map": generateAppScope(),
+    "com.sogou.map.android": generateAppScope(),
+    "com.sohu.inputmethod.sogou": generateAppScope(),
+    "com.baidu.input": generateAppScope(),
+    "com.iflytek.inputmethod": generateAppScope(),
+  };
+
   return {
     configVersion: 93,
     detailLog: false,
@@ -399,7 +492,22 @@ function generateHMAConfig(allPackages) {
     skipSystemAppDataIsolation: true,
     packageQueryWorkaround: false,
     webViewProtection: true,
-    defaultConfig: null,
+    defaultConfig: {
+      useWhitelist: false,
+      excludeSystemApps: true,
+      hideInstallationSource: false,
+      hideSystemInstallationSource: false,
+      excludeTargetInstallationSource: false,
+      invertActivityLaunchProtection: false,
+      excludeVoldIsolation: false,
+      restrictedZygotePermissions: [],
+      applyTemplates: ["App Store Whitelist"],
+      applyPresets: [],
+      applySettingTemplates: [],
+      applySettingsPresets: [],
+      extraAppList: [],
+      extraOppositeAppList: [],
+    },
     ignoredPackagesForPresets: [],
     templates: {
       "App Store Whitelist": {
@@ -409,7 +517,7 @@ function generateHMAConfig(allPackages) {
     },
     settingsTemplates: {},
     disabledHooks: [],
-    scope: {},
+    scope,
   };
 }
 
