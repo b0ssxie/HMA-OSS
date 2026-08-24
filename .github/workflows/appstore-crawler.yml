@@ -1,0 +1,54 @@
+name: App Store Crawler
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # Daily at 3 AM UTC
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    name: Crawl App Stores
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: tools/crawler/package-lock.json
+
+      - name: Install dependencies
+        working-directory: tools/crawler
+        run: npm ci
+
+      - name: Run crawler
+        working-directory: tools/crawler
+        run: npm run all
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-presets-${{ github.run_number }}
+          path: |
+            tools/crawler/output/*.json
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: appstore-presets-latest
+          name: "App Store Presets (Daily Update)"
+          body: |
+            Automated daily crawl of Google Play Store and F-Droid.
+            Generated at: ${{ github.event.repository.updated_at }}
+          files: |
+            tools/crawler/output/appstore_whitelist_preset.json
+            tools/crawler/output/appstore_packages.json
+            tools/crawler/output/packages_*.json
+          make_latest: false
+          prerelease: false

@@ -1,0 +1,14 @@
+{
+  "name": "hma-oss-appstore-crawler",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Crawl app stores to generate HMA-OSS whitelist presets",
+  "scripts": {
+    "crawl": "node crawl.js",
+    "generate": "node generate-preset.js",
+    "all": "node crawl.js && node generate-preset.js"
+  },
+  "dependencies": {
+    "google-play-scraper": "^10.1.2"
+  }
+}
