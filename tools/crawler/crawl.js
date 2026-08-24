@@ -982,10 +982,12 @@ async function main() {
     ...fdroidPackages,
   ]);
 
-  // Mainland China downloadable set: curated Chinese apps + cn Google Play + F-Droid (accessible in CN)
+  // Mainland China downloadable set used for pre-applying the whitelist:
+  // curated Chinese apps + F-Droid (both directly accessible in CN).
+  // defaultConfig already applies the whitelist to ALL installed apps, so
+  // global Google Play apps are still covered without bloating the scope.
   const cnSet = new Set([
     ...TARGETED_PACKAGES,
-    ...cnPackages,
     ...fdroidPackages,
   ]);
 
@@ -1026,7 +1028,7 @@ async function main() {
     },
     packages: cnFiltered,
   };
-  const CN_OUTPUT = path.join(__dirname, "packages_cn.json");
+  const CN_OUTPUT = path.join(OUTPUT_DIR, "packages_cn.json");
   fs.writeFileSync(CN_OUTPUT, JSON.stringify(cnResult, null, 2));
 
   console.log(`\nDone! Saved ${filtered.length} packages to ${OUTPUT_FILE}`);
