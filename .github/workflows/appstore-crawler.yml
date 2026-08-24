@@ -48,6 +48,7 @@ jobs:
             tools/crawler/output/hma_oss_import.json
             tools/crawler/output/appstore_whitelist_preset.json
             tools/crawler/output/appstore_packages.json
+            tools/crawler/packages_cn.json
             tools/crawler/output/packages_*.json
           make_latest: false
           prerelease: false

@@ -3,6 +3,7 @@ import path from "path";
 
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const RAW_FILE = path.join(__dirname, "raw_packages.json");
+const CN_FILE = path.join(__dirname, "packages_cn.json");
 const OUTPUT_DIR = path.join(__dirname, "output");
 const PRESET_FILE = path.join(OUTPUT_DIR, "appstore_whitelist_preset.json");
 const IMPORT_FILE = path.join(OUTPUT_DIR, "hma_oss_import.json");
@@ -386,7 +387,7 @@ function generatePreset(packages, metadata) {
 }
 
 function generateAppScope() {
-  // Common target apps that should see only the whitelist (clean device simulation)
+  // Every app that should see only the whitelist (clean device simulation)
   return {
     useWhitelist: false,
     excludeSystemApps: true,
@@ -405,80 +406,15 @@ function generateAppScope() {
   };
 }
 
-function generateHMAConfig(allPackages) {
-  // Generate a proper JsonConfig that can be imported via HMA-OSS "还原配置"
-  const scope = {
-    // 银行/金融类 - 检测最严格
-    "com.icbc": generateAppScope(),
-    "com.ccb.fun": generateAppScope(),
-    "com.bankcomm": generateAppScope(),
-    "com.chinamworld.main": generateAppScope(),
-    "com.cmbchina.ccd": generateAppScope(),
-    "com.spdb.mobilebank": generateAppScope(),
-    "com.citicbank.mobilebank": generateAppScope(),
-    "com.cmbc.ms": generateAppScope(),
-    "com.hxb.mobilebank": generateAppScope(),
-    "com.cgbchina.mobilebank": generateAppScope(),
-    "com.cebbank.mobile": generateAppScope(),
-    "com.bankofchina": generateAppScope(),
-    "com.cmbchina.uia": generateAppScope(),
-    "com.abchina.mobilebank": generateAppScope(),
-    "com.pingan.bank": generateAppScope(),
-    "com.eg.android.AlipayGphone": generateAppScope(),
-    "com.tenpay.android": generateAppScope(),
-    "com.unionpay": generateAppScope(),
-    "com.unionpay.mobile": generateAppScope(),
-    // 社交/通讯
-    "com.tencent.mm": generateAppScope(),
-    "com.tencent.mobileqq": generateAppScope(),
-    "com.sina.weibo": generateAppScope(),
-    "com.tencent.weishi": generateAppScope(),
-    // 电商/支付
-    "com.taobao.taobao": generateAppScope(),
-    "com.tmall.wireless": generateAppScope(),
-    "com.jingdong.app.mall": generateAppScope(),
-    "com.xunmeng.pinduoduo": generateAppScope(),
-    "com.meituan.android": generateAppScope(),
-    "com.dianping.v1": generateAppScope(),
-    "com.sdu.didi.psnger": generateAppScope(),
-    "com.ele.me": generateAppScope(),
-    // 游戏/娱乐
-    "com.tencent.tmgp.sgame": generateAppScope(),
-    "com.tencent.tmgp.pubgmhd": generateAppScope(),
-    "com.netease.mc": generateAppScope(),
-    "com.miHoYo.Yuanshen": generateAppScope(),
-    "com.mihoyo.hkrpg": generateAppScope(),
-    "com.tencent.tmgp.cod": generateAppScope(),
-    "com.activision.callofduty.shooter": generateAppScope(),
-    "com.tencent.qqgamecenter": generateAppScope(),
-    "com.netease.gamecenter": generateAppScope(),
-    "com.qiyi.video": generateAppScope(),
-    "com.youku.phone": generateAppScope(),
-    "com.tencent.qqlive": generateAppScope(),
-    "tv.danmaku.bili": generateAppScope(),
-    "com.ss.android.ugc.aweme": generateAppScope(),
-    "com.kuaishou.nebula": generateAppScope(),
-    "com.smile.gifmaker": generateAppScope(),
-    // 出行/旅游
-    "ctrip.android.view": generateAppScope(),
-    "com.Qunar": generateAppScope(),
-    "com.MobileTicket": generateAppScope(),
-    "com.ctsi": generateAppScope(),
-    "com.csair": generateAppScope(),
-    "com.airchina": generateAppScope(),
-    "com.tongcheng.android": generateAppScope(),
-    // 工具/系统
-    "com.ucmobile": generateAppScope(),
-    "com.qq.browser": generateAppScope(),
-    "com.baidu.searchbox": generateAppScope(),
-    "com.baidu.BaiduMap": generateAppScope(),
-    "com.autonavi.minimap": generateAppScope(),
-    "com.tencent.map": generateAppScope(),
-    "com.sogou.map.android": generateAppScope(),
-    "com.sohu.inputmethod.sogou": generateAppScope(),
-    "com.baidu.input": generateAppScope(),
-    "com.iflytek.inputmethod": generateAppScope(),
-  };
+function generateHMAConfig(allPackages, cnPackages) {
+  // Every mainland-China-downloadable app is pre-applied with the whitelist
+  // template so the device looks clean to all of them after import.
+  const scope = {};
+  for (const pkg of cnPackages) {
+    if (pkg && pkg.includes(".") && !scope[pkg]) {
+      scope[pkg] = generateAppScope();
+    }
+  }
 
   return {
     configVersion: 93,
@@ -534,6 +470,17 @@ function main() {
 
   console.log(`Found ${raw.packages.length} packages from crawl`);
 
+  let cnPackages = [];
+  if (fs.existsSync(CN_FILE)) {
+    const cnRaw = JSON.parse(fs.readFileSync(CN_FILE, "utf-8"));
+    cnPackages = cnRaw.packages || [];
+    console.log(`Found ${cnPackages.length} mainland-China packages from crawl`);
+  } else {
+    console.warn(
+      "packages_cn.json not found, scope will only use defaultConfig. Run 'node crawl.js' first."
+    );
+  }
+
   console.log("Generating preset...");
   const preset = generatePreset(raw.packages, raw.metadata);
 
@@ -547,9 +494,11 @@ function main() {
   console.log(`Preset written to: ${PRESET_FILE}`);
 
   // Write HMA-OSS importable config (JsonConfig format)
-  const hmaConfig = generateHMAConfig(preset.template.appList);
+  const hmaConfig = generateHMAConfig(preset.template.appList, cnPackages);
   fs.writeFileSync(IMPORT_FILE, JSON.stringify(hmaConfig, null, 2));
-  console.log(`HMA-OSS import config written to: ${IMPORT_FILE}`);
+  console.log(
+    `HMA-OSS import config written to: ${IMPORT_FILE} (scope: ${Object.keys(hmaConfig.scope).length} apps)`
+  );
 
   // Write simplified package list (just the array)
   fs.writeFileSync(

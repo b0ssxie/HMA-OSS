@@ -901,6 +901,7 @@ const TARGETED_PACKAGES = [
 async function crawlGooglePlay() {
   console.log("[Google Play] Starting crawl...");
   const allPackages = new Set();
+  const cnPackages = new Set();
   const categories = Object.values(gplay.category);
 
   for (const country of COUNTRIES) {
@@ -918,6 +919,9 @@ async function crawlGooglePlay() {
 
         for (const app of apps) {
           allPackages.add(app.appId);
+          if (country === "cn") {
+            cnPackages.add(app.appId);
+          }
         }
 
         console.log(
@@ -937,7 +941,10 @@ async function crawlGooglePlay() {
     }
   }
 
-  return [...allPackages];
+  return {
+    allPackages: [...allPackages],
+    cnPackages: [...cnPackages],
+  };
 }
 
 async function crawlFDroid() {
@@ -961,10 +968,12 @@ async function crawlFDroid() {
 async function main() {
   const startTime = Date.now();
 
-  const [googlePlayPackages, fdroidPackages] = await Promise.all([
+  const [gp, fdroidPackages] = await Promise.all([
     crawlGooglePlay(),
     crawlFDroid(),
   ]);
+  const googlePlayPackages = gp.allPackages;
+  const cnPackages = gp.cnPackages;
 
   // Merge all sources
   const allPackages = new Set([
@@ -973,24 +982,30 @@ async function main() {
     ...fdroidPackages,
   ]);
 
+  // Mainland China downloadable set: curated Chinese apps + cn Google Play + F-Droid (accessible in CN)
+  const cnSet = new Set([
+    ...TARGETED_PACKAGES,
+    ...cnPackages,
+    ...fdroidPackages,
+  ]);
+
   // Filter out obviously non-store packages
-  const filtered = [...allPackages].filter((pkg) => {
-    // Skip empty
+  const filterValid = (pkg) => {
     if (!pkg || pkg.length === 0) return false;
-    // Skip if contains special chars that indicate it's not a real package
     if (/[^a-zA-Z0-9._]/.test(pkg)) return false;
-    // Skip very short package names
     if (pkg.split(".").length < 2) return false;
     return true;
-  });
+  };
 
-  filtered.sort();
+  const filtered = [...allPackages].filter(filterValid).sort();
+  const cnFiltered = [...cnSet].filter(filterValid).sort();
 
   const result = {
     metadata: {
       crawledAt: new Date().toISOString(),
       googlePlayCount: googlePlayPackages.length,
       fdroidCount: fdroidPackages.length,
+      cnGooglePlayCount: cnPackages.length,
       targetedCount: TARGETED_PACKAGES.length,
       totalUnique: filtered.length,
       durationMs: Date.now() - startTime,
@@ -999,11 +1014,27 @@ async function main() {
   };
 
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result, null, 2));
+
+  // Separate file: mainland China downloadable packages (used for pre-applying template)
+  const cnResult = {
+    metadata: {
+      crawledAt: new Date().toISOString(),
+      targetedCount: TARGETED_PACKAGES.length,
+      cnGooglePlayCount: cnPackages.length,
+      fdroidCount: fdroidPackages.length,
+      totalUnique: cnFiltered.length,
+    },
+    packages: cnFiltered,
+  };
+  const CN_OUTPUT = path.join(__dirname, "packages_cn.json");
+  fs.writeFileSync(CN_OUTPUT, JSON.stringify(cnResult, null, 2));
+
   console.log(`\nDone! Saved ${filtered.length} packages to ${OUTPUT_FILE}`);
   console.log(`  Google Play: ${googlePlayPackages.length}`);
   console.log(`  F-Droid: ${fdroidPackages.length}`);
   console.log(`  Targeted: ${TARGETED_PACKAGES.length}`);
   console.log(`  Total unique: ${filtered.length}`);
+  console.log(`  CN downloadable set: ${cnFiltered.length} -> ${CN_OUTPUT}`);
 }
 
 main().catch((err) => {
