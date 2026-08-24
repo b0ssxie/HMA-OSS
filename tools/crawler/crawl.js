@@ -5,9 +5,9 @@ import path from "path";
 const OUTPUT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const OUTPUT_FILE = path.join(OUTPUT_DIR, "raw_packages.json");
 
-const COUNTRIES = ["us", "gb", "de", "fr", "jp", "kr", "cn", "br", "in", "ru"];
-const TOP_N_PER_CATEGORY = 200;
-const DELAY_MS = 1500;
+const COUNTRIES = ["us", "jp", "de"];
+const TOP_N_PER_CATEGORY = 100;
+const DELAY_MS = 500;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
