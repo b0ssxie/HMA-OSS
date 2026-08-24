@@ -5,6 +5,7 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const RAW_FILE = path.join(__dirname, "raw_packages.json");
 const OUTPUT_DIR = path.join(__dirname, "output");
 const PRESET_FILE = path.join(OUTPUT_DIR, "appstore_whitelist_preset.json");
+const IMPORT_FILE = path.join(OUTPUT_DIR, "hma_oss_import.json");
 const PACKAGE_LIST_FILE = path.join(OUTPUT_DIR, "appstore_packages.json");
 
 const COMMON_PACKAGES = [
@@ -384,6 +385,34 @@ function generatePreset(packages, metadata) {
   return preset;
 }
 
+function generateHMAConfig(allPackages) {
+  // Generate a proper JsonConfig that can be imported via HMA-OSS "还原配置"
+  return {
+    configVersion: 93,
+    detailLog: false,
+    errorOnlyLog: false,
+    maxLogSize: 512,
+    forceMountData: true,
+    disableActivityLaunchProtection: false,
+    altAppDataIsolation: false,
+    altVoldAppDataIsolation: false,
+    skipSystemAppDataIsolation: true,
+    packageQueryWorkaround: false,
+    webViewProtection: true,
+    defaultConfig: null,
+    ignoredPackagesForPresets: [],
+    templates: {
+      "App Store Whitelist": {
+        isWhitelist: true,
+        appList: allPackages,
+      },
+    },
+    settingsTemplates: {},
+    disabledHooks: [],
+    scope: {},
+  };
+}
+
 function main() {
   if (!fs.existsSync(RAW_FILE)) {
     console.error(
@@ -408,6 +437,11 @@ function main() {
   // Write full preset
   fs.writeFileSync(PRESET_FILE, JSON.stringify(preset, null, 2));
   console.log(`Preset written to: ${PRESET_FILE}`);
+
+  // Write HMA-OSS importable config (JsonConfig format)
+  const hmaConfig = generateHMAConfig(preset.template.appList);
+  fs.writeFileSync(IMPORT_FILE, JSON.stringify(hmaConfig, null, 2));
+  console.log(`HMA-OSS import config written to: ${IMPORT_FILE}`);
 
   // Write simplified package list (just the array)
   fs.writeFileSync(
@@ -435,6 +469,13 @@ function main() {
       console.log(`  ${category}: ${pkgs.length}`);
     }
   }
+
+  console.log("\n=== Import Instructions ===");
+  console.log("1. Download hma_oss_import.json from Releases");
+  console.log("2. In HMA-OSS: 首页 -> 还原配置 -> 选择 hma_oss_import.json");
+  console.log("3. Choose '覆盖' (overwrite) or '追加' (append)");
+  console.log("4. The 'App Store Whitelist' template will be imported");
+  console.log("5. Apply this template to target apps in app settings");
 }
 
 main();

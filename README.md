@@ -84,13 +84,22 @@ node push-preset.js --all --dry-run
 
 ### 在 HMA-OSS 中使用
 
-**方法一：adb 推送（推荐）**
+**方法一：直接导入（最简单）**
+
+1. 从 Releases 下载 `hma_oss_import.json`
+2. 在 HMA-OSS 首页点击「还原配置」
+3. 选择 `hma_oss_import.json` 文件
+4. 选择「覆盖」或「追加」
+5. 模板「App Store Whitelist」会自动导入
+6. 在应用设置中将此模板应用到目标应用
+
+**方法二：adb 推送**
 
 ```bash
 node push-preset.js --scope "com.target.app" --all
 ```
 
-**方法二：手动导入**
+**方法三：手动导入**
 
 1. 下载 `appstore_packages.json`
 2. 复制数组内容
@@ -109,6 +118,7 @@ node push-preset.js --scope "com.target.app" --all
 
 | 文件 | 说明 |
 |------|------|
+| `hma_oss_import.json` | HMA-OSS 可直接导入的配置文件 |
 | `appstore_whitelist_preset.json` | 完整预设（含元数据和分类列表） |
 | `appstore_packages.json` | 所有包名的扁平数组 |
 | `packages_*.json` | 按分类的包名列表 |

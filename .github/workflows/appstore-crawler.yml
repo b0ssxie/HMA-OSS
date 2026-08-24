@@ -45,6 +45,7 @@ jobs:
             Automated daily crawl of Google Play Store and F-Droid.
             Generated at: ${{ github.event.repository.updated_at }}
           files: |
+            tools/crawler/output/hma_oss_import.json
             tools/crawler/output/appstore_whitelist_preset.json
             tools/crawler/output/appstore_packages.json
             tools/crawler/output/packages_*.json
