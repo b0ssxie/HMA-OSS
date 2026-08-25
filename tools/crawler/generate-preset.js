@@ -386,6 +386,52 @@ function generatePreset(packages, metadata) {
   return preset;
 }
 
+// Packages that must NEVER be pre-applied with the whitelist template.
+// Applying app-list filtering to these breaks core system functions
+// (launcher, gesture navigation, recents, system UI, etc.).
+const SYSTEM_PACKAGE_PREFIXES = [
+  "android",
+  "com.android.",
+  "com.google.android.", // GMS framework + Google system apps
+  "com.miui.",
+  "com.xiaomi.",
+  "com.huawei.",
+  "com.honor.",
+  "com.samsung.",
+  "com.sec.android.",
+  "com.sec.",
+  "com.oppo.",
+  "com.coloros.",
+  "com.oplus.",
+  "com.vivo.",
+  "com.oneplus.",
+  "com.realme.",
+  "com.meizu.",
+  "com.transsion.",
+  "com.itelve.",
+  "com.lge.",
+  "com.lg.",
+  "com.asus.",
+  "com.htc.",
+  "com.lenovo.",
+  "com.motorola.",
+  "com.nubia.",
+  "com.zte.",
+  "com.tcl.",
+  "com.blackberry.",
+  "com.cyanogenmod.",
+  "com.lineageos.",
+  "com.omni.",
+  "com.aosp.",
+  "com.crdroid.",
+  "com.derp.",
+];
+
+function isSystemPackage(pkg) {
+  const p = pkg.toLowerCase();
+  return SYSTEM_PACKAGE_PREFIXES.some((pre) => p.startsWith(pre));
+}
+
 function generateAppScope() {
   // Every app that should see only the whitelist (clean device simulation)
   return {
@@ -407,13 +453,14 @@ function generateAppScope() {
 }
 
 function generateHMAConfig(allPackages, cnPackages) {
-  // Every mainland-China-downloadable app is pre-applied with the whitelist
-  // template so the device looks clean to all of them after import.
+  // Pre-apply the whitelist template to every mainland-China-downloadable
+  // USER app. System / OEM packages are deliberately skipped so the launcher,
+  // gesture navigation and other core components keep working.
   const scope = {};
   for (const pkg of cnPackages) {
-    if (pkg && pkg.includes(".") && !scope[pkg]) {
-      scope[pkg] = generateAppScope();
-    }
+    if (!pkg || !pkg.includes(".") || scope[pkg]) continue;
+    if (isSystemPackage(pkg)) continue;
+    scope[pkg] = generateAppScope();
   }
 
   return {
