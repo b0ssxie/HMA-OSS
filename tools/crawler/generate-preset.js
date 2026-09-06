@@ -433,9 +433,11 @@ function isSystemPackage(pkg) {
 }
 
 function generateAppScope() {
-  // Every app that should see only the whitelist (clean device simulation)
+  // Every app that should see only the whitelist (clean device simulation).
+  // MUST be whitelist mode to match the template's isWhitelist=true;
+  // blacklist mode would hide the legit apps instead and show "0 templates".
   return {
-    useWhitelist: false,
+    useWhitelist: true,
     excludeSystemApps: true,
     hideInstallationSource: false,
     hideSystemInstallationSource: false,
@@ -476,7 +478,7 @@ function generateHMAConfig(allPackages, cnPackages) {
     packageQueryWorkaround: false,
     webViewProtection: true,
     defaultConfig: {
-      useWhitelist: false,
+      useWhitelist: true,
       excludeSystemApps: true,
       hideInstallationSource: false,
       hideSystemInstallationSource: false,
