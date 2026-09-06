@@ -106,14 +106,18 @@ function loadPresetExactExclusions() {
   }
   for (const file of fs.readdirSync(APP_PRESETS_DIR)) {
     if (!file.endsWith(".kt")) continue;
-    const text = fs.readFileSync(path.join(APP_PRESETS_DIR, file), "utf-8");
+    // Strip line comments FIRST: a ")" inside a comment (e.g. "(thanks @X)")
+    // would otherwise truncate the non-greedy setOf(...) block match below.
+    // Safe: package names never contain "//".
+    const text = fs
+      .readFileSync(path.join(APP_PRESETS_DIR, file), "utf-8")
+      .replace(/\/\/.*$/gm, "");
     const blockRe = /exactPackageNames\s*=\s*setOf\(([\s\S]*?)\)/g;
     let bm;
     while ((bm = blockRe.exec(text)) !== null) {
-      const block = bm[1].replace(/\/\/.*$/gm, "");
       const strRe = /"([A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
       let sm;
-      while ((sm = strRe.exec(block)) !== null) {
+      while ((sm = strRe.exec(bm[1])) !== null) {
         excluded.add(sm[1]);
       }
     }
