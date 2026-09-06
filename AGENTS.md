@@ -1,56 +1,63 @@
 # AGENTS.md - HMA-OSS
 
-## Project Overview
+## What This Is
 
-HMA-OSS is an Android Zygisk module that hides apps or rejects app list requests to prevent root detection. It's a fork of "Hide My App List" with an OSS build system.
+Android Zygisk module that hides apps / rejects app list requests to defeat root detection. Fork of "Hide My App List" with an OSS build system. Three Gradle modules (`:app`, `:common`, `:zygote`) plus a Node.js crawler that generates whitelist presets.
 
-## Modules
-
-- `app` - Manager APK (UI for configuring hide rules)
-- `common` - Shared code (config models, presets, utilities)
-- `zygote` - Zygisk module (hooks system_server to hide apps)
-
-## Build Commands
+## Build
 
 ```bash
-# Required before any build
-./gradlew prebuild
-
-# Build manager APK
+./gradlew prebuild          # REQUIRED before any other task
 ./gradlew :app:assembleDebug
-
-# Build Zygisk module (requires app to be built first)
-./gradlew :zygote:assembleDebug
+./gradlew :zygote:assembleDebug   # requires :app built first (embeds its APK as asset)
 ```
 
-## Build Prerequisites
+- **JDK 21**, Android SDK targetSdk 36 / minSdk 29
+- `local.properties` **must exist** (even empty) — root `build.gradle.kts` reads it unconditionally
+- Version code = `git rev-list origin/master --count + 0x6f7373`; version name derived from branch + commit hash. Don't hardcode.
+- Release signing via `local.properties`: `fileDir`, `storePassword`, `keyAlias`, `keyPassword`
+- `officialBuild=true` in `local.properties` strips the git-suffix from version name
 
-- JDK 21
-- Android SDK with targetSdk 36, minSdk 29
-- `local.properties` must exist (even if empty for debug builds)
+## Architecture
 
-## Build Order
+- `:app` — Manager APK (Kotlin, View Binding, Material themes). UI for configuring hide rules. Entry: `org.frknkrc44.hma_oss.ui.activity.MainActivity`
+- `:common` — Shared models, JSON config, preset definitions. The 7 `app_presets/*.kt` files (`DetectorAppsPreset`, `RootAppsPreset`, `SuspiciousAppsPreset`, etc.) are the source of truth for what counts as "detector/root/suspicious"
+- `:zygote` — Zygisk module. Injects into **system_server** (not just zygote) via ZygoteLoader. Hooks PMS to intercept `getInstalledPackages`. Entry: `org.frknkrc44.hma_oss.zygote.ZygoteEntry`
 
-The `zygote` module embeds the `app` APK as an asset. Always build `:app` before `:zygote`.
+Key runtime behavior an agent must understand:
+- `HMAService.shouldHide()` returns `false` for any caller **not in `config.scope`** — `defaultConfig` is NOT a fallback for existing apps
+- `defaultConfig` only auto-applies to **newly installed** apps via `ACTION_PACKAGE_ADDED` broadcast (`putIfAbsent`)
+- This is why detector preset packages are explicitly added to scope in the generated config
 
-## Version Scheme
+## App Store Crawler (`tools/crawler/`)
 
-- Version code: git commit count + `0x6f7373` (ASCII "oss")
-- Version name: derived from git branch and commit hash
-- Set `officialBuild=true` in `local.properties` for release builds
+Node.js (not Python). `npm run all` = `crawl.js` then `generate-preset.js`.
 
-## Signing
+```bash
+cd tools/crawler
+npm install
+npm run crawl      # fetch from all sources
+npm run generate   # build preset JSONs
+npm run all        # both
+```
 
-Debug builds use default debug keystore. For release builds, configure in `local.properties`:
-- `fileDir` - path to keystore
-- `storePassword`, `keyAlias`, `keyPassword`
+Sources: Google Play, F-Droid, Xiaomi, Coolapk (CI-available); Wandoujia (IP-blocked in CI, works from mainland); built-in 900+ CN packages. Each source fail-softs — Wandoujia/Coolapk abort independently without failing the run.
 
-## Translations
+**Coolapk auth**: v3 `X-App-Token` reimplemented in pure JS (`bcryptjs`, not `bcrypt`). Secret key (`phase2`) is pinned in `coolapk_auth.json`, extracted once from `lib/arm64-v8a/libauth.so`. CI never downloads the APK. If the log shows `TOKEN REJECTED`, Coolapk rotated keys — re-extract from a new APK (see `tools/crawler/README.md`).
 
-Managed via Crowdin. Source strings: `app/src/main/res/values/strings.xml`.
+**Preset generation**: `generate-preset.js` parses `exactPackageNames` from the 7 `app_presets/*.kt` files and mirrors their prefix/suffix rules. Matching packages are removed from the visible whitelist. Detector preset packages are additionally added to scope explicitly (see runtime behavior above).
 
-## Code Style
+Output: `hma_oss_import.json` (direct import), `appstore_whitelist_preset.json`, `appstore_packages.json`, `packages_cn.json`, `excluded_preset_packages.json`.
 
-- Kotlin with JVM toolchain 21
-- ProGuard/R8 enabled for release builds
-- View Binding enabled in app module
+CI: `.github/workflows/appstore-crawler.yml` runs daily at 03:00 UTC, publishes to `appstore-presets-latest` release. There is **no CI for the Android build itself**.
+
+## No Tests / Lint / Typecheck
+
+This repo has no test suite, linter, or typecheck command. Don't go looking for one.
+
+## Conventions
+
+- Kotlin, JVM toolchain 21, ProGuard/R8 for release
+- View Binding enabled in `:app`
+- Translations via Crowdin; source: `app/src/main/res/values/strings.xml`
+- Don't commit `local.properties`, `tools/crawler/node_modules/`, or `tools/crawler/output/`
