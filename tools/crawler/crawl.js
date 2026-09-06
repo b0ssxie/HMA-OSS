@@ -1068,7 +1068,6 @@ async function crawlGooglePlay() {
         cnPackages.add(app.appId);
       }
     }
-    }
     perCountryTotals[country] += apps.length;
     console.log(
       `  [${country}] ${category}: +${apps.length} apps (total: ${allPackages.size})`
