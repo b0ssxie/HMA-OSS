@@ -981,6 +981,11 @@ const TARGETED_PACKAGES = [
   "com.jsfund",                     // 嘉实基金
   "com.syf",                        // 蚂蚁财富
   "com.tencent.licai",              // 腾讯理财通
+  // 用户反馈补充 (已核实包名)
+  "com.tencent.tmgp.dfm",           // 三角洲行动
+  "com.netease.sky",                // 光遇 (国服)
+  "com.crgt.ilife",                 // 国铁吉讯 (原掌上高铁)
+  "com.tmri.app.main",              // 交管12123
 ];
 
 async function crawlGooglePlay() {
