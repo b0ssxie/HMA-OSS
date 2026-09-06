@@ -1037,9 +1037,27 @@ async function crawlWandoujia() {
   const packages = new Set();
   const RESOURCE_TYPES = [0, 1]; // 0 = 应用榜, 1 = 游戏榜
   const MAX_PAGES = 60;
+  // Fail fast when the network blocks wandoujia.com (e.g. datacenter IPs):
+  // a few consecutive errors aborts the whole source instead of grinding
+  // through all pages. Local runs from mainland China networks are unaffected.
+  const MAX_CONSECUTIVE_ERRORS = 3;
+  let consecutiveErrors = 0;
+  let aborted = false;
+
+  const recordError = (where) => {
+    consecutiveErrors++;
+    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+      console.log(
+        `[Wandoujia] ${consecutiveErrors} consecutive errors (${where}), aborting source (likely blocked from this network)`
+      );
+      aborted = true;
+    }
+  };
 
   for (const resourceType of RESOURCE_TYPES) {
+    if (aborted) break;
     for (let page = 1; page <= MAX_PAGES; page++) {
+      if (aborted) break;
       try {
         const url = `https://www.wandoujia.com/wdjweb/api/top/more?resourceType=${resourceType}&page=${page}`;
         const res = await fetch(url, {
@@ -1053,6 +1071,7 @@ async function crawlWandoujia() {
           console.log(
             `  [wdj] type=${resourceType} page=${page}: HTTP ${res.status}, stop`
           );
+          recordError(`HTTP ${res.status}`);
           break;
         }
         const json = await res.json();
@@ -1062,8 +1081,10 @@ async function crawlWandoujia() {
           console.log(
             `  [wdj] type=${resourceType} page=${page}: empty, stop`
           );
+          consecutiveErrors = 0;
           break;
         }
+        consecutiveErrors = 0;
         let added = 0;
         for (const m of matches) {
           const pn = m.slice(9, -1);
@@ -1080,7 +1101,8 @@ async function crawlWandoujia() {
         console.error(
           `  [wdj] type=${resourceType} page=${page}: ERROR - ${err.message}`
         );
-        await sleep(DELAY_MS * 2);
+        recordError(err.message);
+        if (!aborted) await sleep(DELAY_MS * 2);
       }
     }
   }
