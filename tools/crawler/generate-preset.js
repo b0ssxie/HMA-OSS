@@ -97,6 +97,25 @@ const EXCLUDED_EXTRA_EXACT = [
   "org.frknkrc44.hma_oss",
 ];
 
+function loadPresetExactFromFile(fileName) {
+  const names = new Set();
+  const filePath = path.join(APP_PRESETS_DIR, fileName);
+  if (!fs.existsSync(filePath)) return names;
+  // Strip line comments FIRST: a ")" inside a comment (e.g. "(thanks @X)")
+  // would otherwise truncate the non-greedy setOf(...) block match below.
+  // Safe: package names never contain "//".
+  const text = fs.readFileSync(filePath, "utf-8").replace(/\/\/.*$/gm, "");
+  const blockRe = /exactPackageNames\s*=\s*setOf\(([\s\S]*?)\)/g;
+  let bm;
+  while ((bm = blockRe.exec(text)) !== null) {
+    const strRe = /"([A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
+    let sm;
+    while ((sm = strRe.exec(bm[1])) !== null) {
+      names.add(sm[1]);
+    }
+  }
+  return names;
+}
 let cachedExclusions = null;
 function loadPresetExactExclusions() {
   const excluded = new Set(EXCLUDED_EXTRA_EXACT);
@@ -106,23 +125,21 @@ function loadPresetExactExclusions() {
   }
   for (const file of fs.readdirSync(APP_PRESETS_DIR)) {
     if (!file.endsWith(".kt")) continue;
-    // Strip line comments FIRST: a ")" inside a comment (e.g. "(thanks @X)")
-    // would otherwise truncate the non-greedy setOf(...) block match below.
-    // Safe: package names never contain "//".
-    const text = fs
-      .readFileSync(path.join(APP_PRESETS_DIR, file), "utf-8")
-      .replace(/\/\/.*$/gm, "");
-    const blockRe = /exactPackageNames\s*=\s*setOf\(([\s\S]*?)\)/g;
-    let bm;
-    while ((bm = blockRe.exec(text)) !== null) {
-      const strRe = /"([A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
-      let sm;
-      while ((sm = strRe.exec(bm[1])) !== null) {
-        excluded.add(sm[1]);
-      }
-    }
+    for (const name of loadPresetExactFromFile(file)) excluded.add(name);
   }
   return excluded;
+}
+// Detector preset packages that must ALSO be in scope (as viewers): HMA only
+// auto-applies defaultConfig to newly installed apps, and shouldHide() does
+// nothing for callers outside the explicit scope. Detectors are usually
+// installed before importing and distributed outside stores, so without an
+// explicit scope entry they would keep seeing everything.
+let cachedDetectors = null;
+function getDetectorPackages() {
+  if (!cachedDetectors) {
+    cachedDetectors = loadPresetExactFromFile("DetectorAppsPreset.kt");
+  }
+  return cachedDetectors;
 }
 function getPresetExclusions() {
   if (!cachedExclusions) cachedExclusions = loadPresetExactExclusions();
@@ -609,6 +626,18 @@ function generateHMAConfig(allPackages, cnPackages) {
     if (isSystemPackage(pkg)) continue;
     scope[pkg] = generateAppScope();
   }
+
+  // Explicitly cover built-in detector apps as viewers (see getDetectorPackages).
+  let detectorCount = 0;
+  for (const pkg of getDetectorPackages()) {
+    if (!pkg || !pkg.includes(".") || scope[pkg]) continue;
+    if (isSystemPackage(pkg)) continue;
+    scope[pkg] = generateAppScope();
+    detectorCount++;
+  }
+  console.log(
+    `Added ${detectorCount} detector preset apps into scope (total scope: ${Object.keys(scope).length})`
+  );
 
   return {
     configVersion: 93,
