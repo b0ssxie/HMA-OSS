@@ -1042,6 +1042,11 @@ async function crawlGooglePlay() {
       country,
       lang: "en",
     });
+    // Politeness delay lives in the worker (between tasks) so it gates
+    // *fetch* rate, not result-logging rate. The pool's throughput is
+    // 4 requests in parallel; this delay keeps total RPS bounded at
+    // 4 / DELAY_MS = ~8 RPS, matching the original serial behavior.
+    await sleep(DELAY_MS);
     return { country, category, apps };
   };
 
@@ -1050,7 +1055,7 @@ async function crawlGooglePlay() {
   for (const { item, value, error } of results) {
     if (error) {
       // "Could not ..." = category unavailable in this country, skip silently.
-      // Anything else: log once. (Network errors still get the longer delay.)
+      // Anything else: log once.
       if (!(error.message && error.message.includes("Could not"))) {
         console.error(`  [${item.country}] ${item.category}: ERROR - ${error.message}`);
       }
@@ -1063,13 +1068,11 @@ async function crawlGooglePlay() {
         cnPackages.add(app.appId);
       }
     }
+    }
     perCountryTotals[country] += apps.length;
     console.log(
       `  [${country}] ${category}: +${apps.length} apps (total: ${allPackages.size})`
     );
-    // Per-task politeness delay (inside worker = after the network call).
-    // Short of this, the burst can look like a single client hammering.
-    await sleep(DELAY_MS);
   }
 
   for (const country of COUNTRIES) {
