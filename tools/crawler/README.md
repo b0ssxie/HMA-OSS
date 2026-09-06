@@ -1,6 +1,6 @@
 # App Store Crawler
 
-Crawls Google Play Store, F-Droid and Wandoujia (豌豆荚, CN store) to generate a whitelist preset for HMA-OSS.
+Crawls Google Play Store, F-Droid, Wandoujia (豌豆荚) and Xiaomi App Store (小米应用商店, CN stores) to generate a whitelist preset for HMA-OSS.
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Output files will be in `tools/crawler/output/`.
 
 | Command | Description |
 |---------|-------------|
-| `npm run crawl` | Crawl Google Play + F-Droid + Wandoujia stores |
+| `npm run crawl` | Crawl Google Play + F-Droid + Wandoujia + Xiaomi stores |
 | `npm run generate` | Generate HMA-OSS preset from crawled data |
 | `npm run all` | Run both steps |
 | `node push-preset.js` | Push preset to connected device via adb |

@@ -1111,6 +1111,100 @@ async function crawlWandoujia() {
   return [...packages];
 }
 
+async function crawlXiaomi() {
+  console.log("[Xiaomi] Starting crawl...");
+  const packages = new Set();
+  const MAX_CATEGORY_ID = 40;
+  const PAGES_PER_CATEGORY = 4; // top pages per category = most popular
+  const PAGE_SIZE = 30;
+  const MAX_CONSECUTIVE_ERRORS = 3;
+  let consecutiveErrors = 0;
+  let aborted = false;
+
+  const fetchJson = async (url) => {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        Referer: "https://app.mi.com/",
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
+  const apiUrl = (page, categoryId) =>
+    `https://app.mi.com/categotyAllListApi?page=${page}&categoryId=${categoryId}&pageSize=${PAGE_SIZE}`;
+
+  // Probe category IDs 1..40, crawl top pages of the valid ones
+  for (
+    let categoryId = 1;
+    categoryId <= MAX_CATEGORY_ID && !aborted;
+    categoryId++
+  ) {
+    let first;
+    try {
+      first = await fetchJson(apiUrl(0, categoryId));
+    } catch (err) {
+      // HTTP 4xx / empty = invalid category (skip silently);
+      // network errors / 5xx may mean blocking -> count toward abort
+      if (/HTTP 4\d\d/.test(err.message)) {
+        await sleep(DELAY_MS);
+        continue;
+      }
+      console.error(`  [mi] probe category=${categoryId}: ${err.message}`);
+      if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        console.log(
+          `[Xiaomi] ${consecutiveErrors} consecutive errors, aborting source (likely blocked from this network)`
+        );
+        aborted = true;
+      }
+      await sleep(DELAY_MS);
+      continue;
+    }
+    const firstList = (first && first.data) || [];
+    if (firstList.length === 0) {
+      await sleep(DELAY_MS);
+      continue; // invalid/empty category
+    }
+    consecutiveErrors = 0;
+    for (let page = 0; page < PAGES_PER_CATEGORY && !aborted; page++) {
+      try {
+        const json = page === 0 ? first : await fetchJson(apiUrl(page, categoryId));
+        const apps = (json && json.data) || [];
+        if (apps.length === 0) break;
+        consecutiveErrors = 0;
+        let added = 0;
+        for (const app of apps) {
+          if (app && app.packageName && !packages.has(app.packageName)) {
+            packages.add(app.packageName);
+            added++;
+          }
+        }
+        console.log(
+          `  [mi] category=${categoryId} page=${page}: +${added} (total: ${packages.size})`
+        );
+        if (json.hasNext === false) break;
+        await sleep(DELAY_MS);
+      } catch (err) {
+        console.error(
+          `  [mi] category=${categoryId} page=${page}: ERROR - ${err.message}`
+        );
+        if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.log(
+            `[Xiaomi] ${consecutiveErrors} consecutive errors, aborting source`
+          );
+          aborted = true;
+        } else {
+          await sleep(DELAY_MS * 2);
+        }
+      }
+    }
+  }
+
+  console.log(`[Xiaomi] Found ${packages.size} packages`);
+  return [...packages];
+}
+
 async function crawlFDroid() {
   console.log("[F-Droid] Fetching index-v2.json...");
   const url = "https://f-droid.org/repo/index-v2.json";
@@ -1132,11 +1226,13 @@ async function crawlFDroid() {
 async function main() {
   const startTime = Date.now();
 
-  const [gp, fdroidPackages, wandoujiaPackages] = await Promise.all([
-    crawlGooglePlay(),
-    crawlFDroid(),
-    crawlWandoujia(),
-  ]);
+  const [gp, fdroidPackages, wandoujiaPackages, xiaomiPackages] =
+    await Promise.all([
+      crawlGooglePlay(),
+      crawlFDroid(),
+      crawlWandoujia(),
+      crawlXiaomi(),
+    ]);
   const googlePlayPackages = gp.allPackages;
   const cnPackages = gp.cnPackages;
 
@@ -1146,15 +1242,17 @@ async function main() {
     ...googlePlayPackages,
     ...fdroidPackages,
     ...wandoujiaPackages,
+    ...xiaomiPackages,
   ]);
 
   // Mainland China downloadable set used for pre-applying the whitelist:
-  // curated Chinese apps + Wandoujia (CN store) + F-Droid (accessible in CN).
+  // curated Chinese apps + Wandoujia/Xiaomi (CN stores) + F-Droid (accessible in CN).
   // defaultConfig already applies the whitelist to ALL installed apps, so
   // global Google Play apps are still covered without bloating the scope.
   const cnSet = new Set([
     ...TARGETED_PACKAGES,
     ...wandoujiaPackages,
+    ...xiaomiPackages,
     ...fdroidPackages,
   ]);
 
@@ -1175,6 +1273,7 @@ async function main() {
       googlePlayCount: googlePlayPackages.length,
       fdroidCount: fdroidPackages.length,
       wandoujiaCount: wandoujiaPackages.length,
+      xiaomiCount: xiaomiPackages.length,
       cnGooglePlayCount: cnPackages.length,
       targetedCount: TARGETED_PACKAGES.length,
       totalUnique: filtered.length,
@@ -1191,6 +1290,7 @@ async function main() {
       crawledAt: new Date().toISOString(),
       targetedCount: TARGETED_PACKAGES.length,
       wandoujiaCount: wandoujiaPackages.length,
+      xiaomiCount: xiaomiPackages.length,
       cnGooglePlayCount: cnPackages.length,
       fdroidCount: fdroidPackages.length,
       totalUnique: cnFiltered.length,
@@ -1204,6 +1304,7 @@ async function main() {
   console.log(`  Google Play: ${googlePlayPackages.length}`);
   console.log(`  F-Droid: ${fdroidPackages.length}`);
   console.log(`  Wandoujia: ${wandoujiaPackages.length}`);
+  console.log(`  Xiaomi: ${xiaomiPackages.length}`);
   console.log(`  Targeted: ${TARGETED_PACKAGES.length}`);
   console.log(`  Total unique: ${filtered.length}`);
   console.log(`  CN downloadable set: ${cnFiltered.length} -> ${CN_OUTPUT}`);
