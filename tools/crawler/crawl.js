@@ -1398,6 +1398,24 @@ async function crawlCoolapk() {
       consecutiveErrors = 0;
       const added = extractCoolapkPackages(text, packages);
       console.log(`  [coolapk] ranking page=${page}: +${added} (total: ${packages.size})`);
+      if (page === 1) {
+        // One-time schema probe: which entity types / keys exist?
+        // TODO: remove once the package-carrying fields are known.
+        const types = {};
+        const typeRe = /"entityType"\s*:\s*"([^"]+)"/g;
+        let tm;
+        while ((tm = typeRe.exec(text)) !== null && Object.keys(types).length < 40) {
+          types[tm[1]] = (types[tm[1]] || 0) + 1;
+        }
+        const keys = new Set();
+        const keyRe = /"([A-Za-z0-9_]*(?:apk|pkg|package)[A-Za-z0-9_]*)"\s*:/gi;
+        let km;
+        while ((km = keyRe.exec(text)) !== null && keys.size < 40) {
+          keys.add(km[1]);
+        }
+        console.log(`  [coolapk] schema entityTypes: ${JSON.stringify(types)}`);
+        console.log(`  [coolapk] schema apk-ish keys: ${[...keys].join(",")}`);
+      }
       await sleep(DELAY_MS);
     } catch (err) {
       recordError(`ranking page=${page}`, err);
@@ -1408,22 +1426,28 @@ async function crawlCoolapk() {
   // 2) App search over common keywords (bulk apk entities)
   if (!aborted) {
     const SEARCH_PATHS = ["/v6/search/apk", "/v6/search?type=apk"];
+    const SEARCH_PARAMS = ["keyword", "q", "query", "kw", "keyWord", "word", "searchValue"];
     let searchPath = null;
+    let searchParam = null;
     for (const p of SEARCH_PATHS) {
-      if (aborted) break;
-      try {
-        const sep = p.includes("?") ? "&" : "?";
-        const text = await fetchText(
-          `https://api.coolapk.com${p}${sep}keyword=${encodeURIComponent("微信")}&page=1`
-        );
-        consecutiveErrors = 0;
-        searchPath = p;
-        const added = extractCoolapkPackages(text, packages);
-        console.log(`  [coolapk] search path OK: ${p} (+${added})`);
-        break;
-      } catch (err) {
-        if (tokenRejected || aborted) break;
-        console.log(`  [coolapk] search probe ${p} failed (${err.message}), try next`);
+      if (aborted || searchPath) break;
+      for (const qp of SEARCH_PARAMS) {
+        if (aborted || searchPath) break;
+        try {
+          const sep = p.includes("?") ? "&" : "?";
+          const text = await fetchText(
+            `https://api.coolapk.com${p}${sep}${qp}=${encodeURIComponent("微信")}&page=1`
+          );
+          consecutiveErrors = 0;
+          searchPath = p;
+          searchParam = qp;
+          const added = extractCoolapkPackages(text, packages);
+          console.log(`  [coolapk] search path OK: ${p} param=${qp} (+${added})`);
+          break;
+        } catch (err) {
+          if (tokenRejected || aborted) break;
+          console.log(`  [coolapk] search probe ${p} param=${qp} failed (${err.message.slice(0, 100)})`);
+        }
       }
     }
     if (searchPath && !aborted) {
@@ -1438,7 +1462,7 @@ async function crawlCoolapk() {
         for (let page = 1; page <= 2 && !aborted; page++) {
           try {
             const text = await fetchText(
-              `https://api.coolapk.com${searchPath}${sep}keyword=${encodeURIComponent(kw)}&page=${page}`
+              `https://api.coolapk.com${searchPath}${sep}${searchParam}=${encodeURIComponent(kw)}&page=${page}`
             );
             consecutiveErrors = 0;
             const added = extractCoolapkPackages(text, packages);
