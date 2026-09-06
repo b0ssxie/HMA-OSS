@@ -8,6 +8,135 @@ const OUTPUT_DIR = path.join(__dirname, "output");
 const PRESET_FILE = path.join(OUTPUT_DIR, "appstore_whitelist_preset.json");
 const IMPORT_FILE = path.join(OUTPUT_DIR, "hma_oss_import.json");
 const PACKAGE_LIST_FILE = path.join(OUTPUT_DIR, "appstore_packages.json");
+const EXCLUDED_FILE = path.join(OUTPUT_DIR, "excluded_preset_packages.json");
+
+// HMA-OSS built-in app presets live in the same repo; parse their
+// exactPackageNames at generation time so exclusions auto-sync with upstream.
+const APP_PRESETS_DIR = path.join(
+  __dirname,
+  "..",
+  "..",
+  "common",
+  "src",
+  "main",
+  "java",
+  "icu",
+  "nullptr",
+  "hidemyapplist",
+  "common",
+  "app_presets"
+);
+
+// Static package-name rules mirrored from canBeAddedIntoPreset() in the
+// preset sources (manifest/APK heuristics can't be evaluated statically).
+// These are apps detectors look for, so they must NOT be visible via whitelist.
+const EXCLUDED_PREFIXES = [
+  // DetectorAppsPreset
+  "me.garfieldhan.",
+  // RootAppsPreset
+  "dev.ukanth.ufirewall",
+  "xzr.",
+  "moe.xzr.",
+  "org.lsposed",
+  "com.drdisagree.iconify",
+  "com.dergoogler.mmrl",
+  "com.xayah.databackup",
+  "com.smartpack.",
+  "org.fdroid.fdroid.privileged",
+  // SuspiciousAppsPreset
+  "com.offsec.",
+  "com.termux",
+  "com.realvnc.",
+  "nextapp.fx",
+  "com.ghisler.",
+  "ru.zdevs.",
+  "com.mixplorer",
+  "bin.mt.",
+  "com.x0.strai.",
+  "com.microsoft.rdc.",
+  "com.teamviewer.",
+  // CustomROMPreset
+  "lineageos.",
+  "org.lineageos.",
+  "com.caf.",
+  "org.calyxos.",
+  "co.aospa.",
+  "org.omnirom.",
+  "org.protonaosp.",
+  "org.evolution.",
+  "org.evolutionx.",
+  "com.android.system.switch.",
+  "com.accents.",
+  "com.alpha.",
+  "com.android.systemui.",
+  "com.android.theme.",
+  "com.bootleggers.",
+  "com.custom.overlay.",
+  "com.gnonymous.gvisualmod.",
+  "com.libremobileos.",
+  "com.nikgapps.",
+  "com.potato.",
+  "eu.xiaomi.",
+  // SDhizukuAppsPreset
+  "moe.shizuku.",
+];
+const EXCLUDED_SUFFIXES = [
+  ".keyattestation",
+  ".viper4android",
+  ".viperfx",
+  ".magisk",
+  ".apatch",
+  ".evolution",
+  ".evolutionx",
+  ".overlay.fog",
+];
+const EXCLUDED_CONTAINS = [".busybox", ".apatch."];
+// Extra exact exclusions not parseable from preset sources
+const EXCLUDED_EXTRA_EXACT = [
+  // HMA-OSS manager itself (BuildConfig.APP_PACKAGE_NAME, not a literal)
+  "org.frknkrc44.hma_oss",
+];
+
+let cachedExclusions = null;
+function loadPresetExactExclusions() {
+  const excluded = new Set(EXCLUDED_EXTRA_EXACT);
+  if (!fs.existsSync(APP_PRESETS_DIR)) {
+    console.warn("app_presets dir not found, using pattern rules only");
+    return excluded;
+  }
+  for (const file of fs.readdirSync(APP_PRESETS_DIR)) {
+    if (!file.endsWith(".kt")) continue;
+    const text = fs.readFileSync(path.join(APP_PRESETS_DIR, file), "utf-8");
+    const blockRe = /exactPackageNames\s*=\s*setOf\(([\s\S]*?)\)/g;
+    let bm;
+    while ((bm = blockRe.exec(text)) !== null) {
+      const block = bm[1].replace(/\/\/.*$/gm, "");
+      const strRe = /"([A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
+      let sm;
+      while ((sm = strRe.exec(block)) !== null) {
+        excluded.add(sm[1]);
+      }
+    }
+  }
+  return excluded;
+}
+function getPresetExclusions() {
+  if (!cachedExclusions) cachedExclusions = loadPresetExactExclusions();
+  return cachedExclusions;
+}
+function isPresetExcluded(pkg, exactSet) {
+  if (exactSet.has(pkg)) return true;
+  for (const pre of EXCLUDED_PREFIXES) {
+    if (pkg.startsWith(pre)) return true;
+  }
+  for (const suf of EXCLUDED_SUFFIXES) {
+    if (pkg.endsWith(suf)) return true;
+  }
+  for (const sub of EXCLUDED_CONTAINS) {
+    if (pkg.includes(sub)) return true;
+  }
+  return false;
+}
 
 const COMMON_PACKAGES = [
   // Android system
@@ -356,7 +485,16 @@ function categorizePackages(packages) {
 function generatePreset(packages, metadata) {
   const allPackages = [...new Set([...COMMON_PACKAGES, ...packages])].sort();
 
-  const categorized = categorizePackages(allPackages);
+  // Hide built-in preset apps (detectors / root / suspicious): remove them
+  // from the visible whitelist so whitelisted callers cannot see them.
+  const exclusions = getPresetExclusions();
+  const excluded = allPackages.filter((pkg) => isPresetExcluded(pkg, exclusions));
+  const visiblePackages =
+    excluded.length > 0
+      ? allPackages.filter((pkg) => !isPresetExcluded(pkg, exclusions))
+      : allPackages;
+
+  const categorized = categorizePackages(visiblePackages);
 
   // Build the HMA-OSS compatible template
   const preset = {
@@ -366,9 +504,12 @@ function generatePreset(packages, metadata) {
       "In HMA-OSS: App Settings -> Apply Templates -> Create new template -> paste the appList below",
     _metadata: {
       generatedAt: metadata.crawledAt,
-      totalPackages: allPackages.length,
+      totalPackages: visiblePackages.length,
+      excludedPresetPackages: excluded.length,
       googlePlayPackages: metadata.googlePlayCount,
       fdroidPackages: metadata.fdroidCount,
+      wandoujiaPackages: metadata.wandoujiaCount,
+      xiaomiPackages: metadata.xiaomiCount,
       categories: Object.fromEntries(
         Object.entries(categorized).map(([k, v]) => [k, v.length])
       ),
@@ -377,13 +518,13 @@ function generatePreset(packages, metadata) {
     template: {
       name: "App Store Whitelist",
       isWhitelist: true,
-      appList: allPackages,
+      appList: visiblePackages,
     },
     // Categorized lists for selective use
     categorized: categorized,
   };
 
-  return preset;
+  return { preset, excluded };
 }
 
 // Packages that must NEVER be pre-applied with the whitelist template.
@@ -531,7 +672,10 @@ function main() {
   }
 
   console.log("Generating preset...");
-  const preset = generatePreset(raw.packages, raw.metadata);
+  const { preset, excluded } = generatePreset(raw.packages, raw.metadata);
+  console.log(
+    `Excluded ${excluded.length} built-in preset apps (detectors/root/suspicious) from whitelist`
+  );
 
   // Create output directory
   if (!fs.existsSync(OUTPUT_DIR)) {
@@ -541,6 +685,27 @@ function main() {
   // Write full preset
   fs.writeFileSync(PRESET_FILE, JSON.stringify(preset, null, 2));
   console.log(`Preset written to: ${PRESET_FILE}`);
+
+  // Write excluded preset packages (transparency: what was hidden via whitelist)
+  const exclusions = getPresetExclusions();
+  fs.writeFileSync(
+    EXCLUDED_FILE,
+    JSON.stringify(
+      {
+        _comment:
+          "Packages removed from the whitelist because they match HMA-OSS built-in app presets (detector/root/suspicious). Parsed from common/.../app_presets/*.kt exactPackageNames plus mirrored prefix/suffix rules.",
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          exactRuleCount: exclusions.size,
+          excludedVisibleCount: excluded.length,
+        },
+        excluded,
+      },
+      null,
+      2
+    )
+  );
+  console.log(`Excluded list written to: ${EXCLUDED_FILE}`);
 
   // Write HMA-OSS importable config (JsonConfig format)
   const hmaConfig = generateHMAConfig(preset.template.appList, cnPackages);
@@ -579,7 +744,7 @@ function main() {
   console.log("\n=== Import Instructions ===");
   console.log("1. Download hma_oss_import.json from Releases");
   console.log("2. In HMA-OSS: 首页 -> 还原配置 -> 选择 hma_oss_import.json");
-  console.log("3. Choose '覆盖' (overwrite) or '追加' (append)");
+  console.log("3. Choose '覆盖' (overwrite, NOT append)");
   console.log("4. The 'App Store Whitelist' template will be imported");
   console.log("5. Apply this template to target apps in app settings");
 }
