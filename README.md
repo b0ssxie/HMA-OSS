@@ -152,6 +152,7 @@ node push-preset.js --scope "com.target.app" --all
 | `appstore_whitelist_preset.json` | 完整预设（含元数据和分类列表） |
 | `appstore_packages.json` | 所有包名的扁平数组 |
 | `packages_cn.json` | 大陆可下载应用包名（预应用 scope 的来源） |
+| `excluded_preset_packages.json` | 因命中内置预设（检测器/root/可疑）被移出白名单的包 |
 | `packages_*.json` | 按分类的包名列表 |
 
 ### 自定义
@@ -178,6 +179,11 @@ node push-preset.js --scope "com.target.app" --all
 
 **豌豆荚数据为什么没有？**
 豌豆荚屏蔽了 GitHub 机房 IP，CI 抓不到。在大陆网络的机器上跑一遍 `npm run all` 即可抓到并入。
+
+**检测器/root 应用会不会被白名单暴露？**
+不会。生成时会自动解析本仓库 7 个内置预设源码的 `exactPackageNames`（检测器/root/可疑/ROM/Shizuku/Xposed），
+叠加对应的前后缀规则，把命中的包从白名单可见集里剔除（清单见 `excluded_preset_packages.json`）。
+上游预设更新后无需改爬虫代码，重新跑即自动同步。
 
 ## 相关链接
 

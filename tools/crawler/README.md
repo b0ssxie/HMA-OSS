@@ -85,7 +85,18 @@ node push-preset.js --all --dry-run
 | `appstore_whitelist_preset.json` | Full preset with metadata and categorized lists |
 | `appstore_packages.json` | Flat array of all package names |
 | `packages_cn.json` | Mainland-CN downloadable packages (source of the pre-applied scope) |
+| `excluded_preset_packages.json` | Packages removed from the whitelist for matching built-in presets |
 | `packages_*.json` | Per-category package lists |
+
+## Built-in Preset Exclusions
+
+At generation time, `generate-preset.js` parses `exactPackageNames` from the
+seven preset sources under `common/.../app_presets/` and mirrors their static
+prefix/suffix package rules. Matching packages (detectors, root, suspicious
+apps — e.g. Magisk, AdAway, Termux) are removed from the visible whitelist so
+whitelisted callers cannot see them. No crawler changes are needed when upstream
+presets are updated; just re-run. Manifest/APK-based heuristics can't be
+evaluated statically and are not covered.
 
 ## GitHub Actions
 
