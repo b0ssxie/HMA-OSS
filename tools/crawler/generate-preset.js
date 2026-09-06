@@ -531,6 +531,7 @@ function generatePreset(packages, metadata) {
       fdroidPackages: metadata.fdroidCount,
       wandoujiaPackages: metadata.wandoujiaCount,
       xiaomiPackages: metadata.xiaomiCount,
+      coolapkPackages: metadata.coolapkCount,
       categories: Object.fromEntries(
         Object.entries(categorized).map(([k, v]) => [k, v.length])
       ),

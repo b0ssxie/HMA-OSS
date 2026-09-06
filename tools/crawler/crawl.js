@@ -1388,42 +1388,9 @@ async function crawlCoolapk() {
     }
   };
 
-  // 1) Hot ranking feeds (contain apk cards)
-  const RANKING_PAGES = 10;
-  for (let page = 1; page <= RANKING_PAGES && !aborted; page++) {
-    try {
-      const text = await fetchText(
-        `https://api.coolapk.com/v6/page/dataList?url=V9_HOME_TAB_RANKING&page=${page}`
-      );
-      consecutiveErrors = 0;
-      const added = extractCoolapkPackages(text, packages);
-      console.log(`  [coolapk] ranking page=${page}: +${added} (total: ${packages.size})`);
-      if (page === 1) {
-        // One-time schema probe: which entity types / keys exist?
-        // TODO: remove once the package-carrying fields are known.
-        const types = {};
-        const typeRe = /"entityType"\s*:\s*"([^"]+)"/g;
-        let tm;
-        while ((tm = typeRe.exec(text)) !== null && Object.keys(types).length < 40) {
-          types[tm[1]] = (types[tm[1]] || 0) + 1;
-        }
-        const keys = new Set();
-        const keyRe = /"([A-Za-z0-9_]*(?:apk|pkg|package)[A-Za-z0-9_]*)"\s*:/gi;
-        let km;
-        while ((km = keyRe.exec(text)) !== null && keys.size < 40) {
-          keys.add(km[1]);
-        }
-        console.log(`  [coolapk] schema entityTypes: ${JSON.stringify(types)}`);
-        console.log(`  [coolapk] schema apk-ish keys: ${[...keys].join(",")}`);
-      }
-      await sleep(DELAY_MS);
-    } catch (err) {
-      recordError(`ranking page=${page}`, err);
-      if (!aborted) await sleep(DELAY_MS * 2);
-    }
-  }
-
-  // 2) App search over common keywords (bulk apk entities)
+  // App search over common keywords (bulk apk entities). NOTE: ranking feeds
+  // carry no package info (verified: zero apk-ish keys), so search is the
+  // only productive endpoint.
   if (!aborted) {
     const SEARCH_PATHS = ["/v6/search/apk", "/v6/search?type=apk"];
     const SEARCH_PARAMS = ["keyword", "q", "query", "kw", "keyWord", "word", "searchValue"];
