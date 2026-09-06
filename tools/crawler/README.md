@@ -45,8 +45,10 @@ node push-preset.js --all --dry-run
 
 | File | Description |
 |------|-------------|
+| `hma_oss_import.json` | Directly importable HMA-OSS config (whitelist template + pre-applied scope) |
 | `appstore_whitelist_preset.json` | Full preset with metadata and categorized lists |
 | `appstore_packages.json` | Flat array of all package names |
+| `packages_cn.json` | Mainland-CN downloadable packages (source of the pre-applied scope) |
 | `packages_*.json` | Per-category package lists |
 
 ## GitHub Actions
@@ -57,13 +59,20 @@ Download from: **Releases** -> `appstore-presets-latest`
 
 ## How to Use in HMA-OSS
 
-### Method 1: Push via adb (Recommended)
+### Method 1: Direct import (Recommended)
+
+1. Download `hma_oss_import.json` from Releases (`appstore-presets-latest`)
+2. In HMA-OSS: Home -> Restore config -> select the file
+3. You must choose **Overwrite** ⚠️: with Append, existing on-device configs take precedence (`putIfAbsent`), so fixes and newly pre-applied apps won't take effect
+4. The `App Store Whitelist` template is imported and already pre-applied to ~6800 mainland apps + default config for newly installed apps; system/OEM packages are excluded so the launcher keeps working
+
+### Method 2: Push via adb
 
 ```bash
 node push-preset.js --scope "com.target.app" --all
 ```
 
-### Method 2: Manual
+### Method 3: Manual
 
 1. Open `appstore_packages.json`
 2. Copy the array contents

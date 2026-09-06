@@ -43,9 +43,20 @@
 
 ## 应用商店白名单爬虫
 
-本项目包含一个自动爬虫工具，从 Google Play Store 和 F-Droid 抓取合法应用的包名，生成白名单预设。
+本项目包含一个自动爬虫工具，从 Google Play Store、F-Droid、豌豆荚、小米应用商店抓取合法应用的包名，外加 900+ 内置国产应用包名，生成白名单预设（目前白名单约 20000 个包，大陆预应用约 6800 个应用）。
 
 **目的**: 将白名单应用到 HMA-OSS 后，只有应用商店中可下载的合法应用对目标应用可见，使设备看起来像一台干净的未 Root 手机。
+
+### 数据源状态
+
+| 数据源 | CI 是否可用 | 说明 |
+|--------|-------------|------|
+| Google Play（美/日/德/中） | ✅ | 各分类 Top 免费应用 |
+| F-Droid | ✅ | 全部开源应用 |
+| 小米应用商店 | ✅ | 各分类热门应用（含腾讯系游戏） |
+| 豌豆荚 | ❌（CI 被屏蔽） | 屏蔽机房 IP，大陆本地运行可用 |
+| 应用宝 | ❌（已废） | 官网改版为 SPA + 反爬，无包名可抓 |
+| 内置名单 | ✅ | 900+ 国产应用（微信/支付宝/银行/游戏等） |
 
 ### 快速开始
 
@@ -61,7 +72,7 @@ npm run all
 
 | 命令 | 说明 |
 |------|------|
-| `npm run crawl` | 爬取 Google Play + F-Droid 商店 |
+| `npm run crawl` | 爬取 Google Play + F-Droid + 豌豆荚 + 小米商店 |
 | `npm run generate` | 从爬取数据生成 HMA-OSS 预设 |
 | `npm run all` | 执行上述两步 |
 | `node push-preset.js` | 通过 adb 推送预设到手机 |
@@ -84,14 +95,14 @@ node push-preset.js --all --dry-run
 
 ### 在 HMA-OSS 中使用
 
-**方法一：直接导入（最简单）**
+**方法一：直接导入（最简单，推荐）**
 
-1. 从 Releases 下载 `hma_oss_import.json`
+1. 从 Releases（`appstore-presets-latest`）下载 `hma_oss_import.json`
 2. 在 HMA-OSS 首页点击「还原配置」
 3. 选择 `hma_oss_import.json` 文件
-4. 选择「覆盖」或「追加」
-5. 模板「App Store Whitelist」会自动导入
-6. 在应用设置中将此模板应用到目标应用
+4. 必须选择「**覆盖**」⚠️：选「追加」时设备上已有的旧配置优先保留（`putIfAbsent`），新文件的修复和新增预应用不会生效
+5. 模板「App Store Whitelist」会自动导入，且已预应用到约 6800 个大陆常用应用 + 新装应用默认配置，无需手动逐个勾选
+6. 系统/OEM 应用（桌面、手势导航等）已排除在预应用之外，不会导致桌面异常
 
 **方法二：adb 推送**
 
@@ -118,9 +129,10 @@ node push-preset.js --scope "com.target.app" --all
 
 | 文件 | 说明 |
 |------|------|
-| `hma_oss_import.json` | HMA-OSS 可直接导入的配置文件 |
+| `hma_oss_import.json` | HMA-OSS 可直接导入的配置文件（含白名单模板 + 预应用 scope） |
 | `appstore_whitelist_preset.json` | 完整预设（含元数据和分类列表） |
 | `appstore_packages.json` | 所有包名的扁平数组 |
+| `packages_cn.json` | 大陆可下载应用包名（预应用 scope 的来源） |
 | `packages_*.json` | 按分类的包名列表 |
 
 ### 自定义
