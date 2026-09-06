@@ -1349,14 +1349,19 @@ async function crawlCoolapk() {
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
     }
-    let status = null;
+    // NOTE: list endpoints return {data:[...]} with NO top-level status
+    // field - only treat an explicit non-1 status as an error.
+    let json;
     try {
-      status = JSON.parse(text).status;
+      json = JSON.parse(text);
     } catch {
-      // non-JSON: treat as fatal for this source
+      throw new Error(`non-JSON response: ${text.slice(0, 120)}`);
     }
-    if (status !== 1) {
-      throw new Error(`api status=${status}: ${text.slice(0, 160)}`);
+    if (json.status !== undefined && json.status !== 1) {
+      throw new Error(`api status=${json.status}: ${text.slice(0, 160)}`);
+    }
+    if (json.data === undefined) {
+      throw new Error(`no data field: ${text.slice(0, 160)}`);
     }
     return text;
   };
