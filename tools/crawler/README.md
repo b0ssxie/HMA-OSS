@@ -98,6 +98,11 @@ whitelisted callers cannot see them. No crawler changes are needed when upstream
 presets are updated; just re-run. Manifest/APK-based heuristics can't be
 evaluated statically and are not covered.
 
+Detector preset packages are additionally added to the scope explicitly:
+HMA's `defaultConfig` only auto-applies to newly installed apps, and
+`shouldHide()` lets callers outside the explicit scope through, so
+previously installed detectors need explicit scope entries to be filtered.
+
 ## GitHub Actions
 
 The workflow `.github/workflows/appstore-crawler.yml` runs daily at 3 AM UTC and publishes a release with the latest preset files.

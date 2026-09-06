@@ -185,6 +185,12 @@ node push-preset.js --scope "com.target.app" --all
 叠加对应的前后缀规则，把命中的包从白名单可见集里剔除（清单见 `excluded_preset_packages.json`）。
 上游预设更新后无需改爬虫代码，重新跑即自动同步。
 
+**检测器装上后能看到所有应用？**
+要把检测器本身也管住：HMA 的 `defaultConfig` 只对新装应用自动生效，
+`shouldHide` 对不在 scope 里的调用者直接放行，所以存量检测器必须有显式 scope 条目。
+本配置已把检测器预设包显式加入 scope 并套用白名单模板（动态规则如 `me.garfieldhan.*` 无法静态枚举的除外）。
+同样记得用「覆盖」导入，否则旧条目会保留。
+
 ## 相关链接
 
 - https://github.com/frknkrc44/HMA-OSS/wiki
