@@ -1032,6 +1032,63 @@ async function crawlGooglePlay() {
   };
 }
 
+async function crawlWandoujia() {
+  console.log("[Wandoujia] Starting crawl...");
+  const packages = new Set();
+  const RESOURCE_TYPES = [0, 1]; // 0 = 应用榜, 1 = 游戏榜
+  const MAX_PAGES = 60;
+
+  for (const resourceType of RESOURCE_TYPES) {
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      try {
+        const url = `https://www.wandoujia.com/wdjweb/api/top/more?resourceType=${resourceType}&page=${page}`;
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            Referer: "https://www.wandoujia.com/top/app",
+          },
+        });
+        if (!res.ok) {
+          console.log(
+            `  [wdj] type=${resourceType} page=${page}: HTTP ${res.status}, stop`
+          );
+          break;
+        }
+        const json = await res.json();
+        const content = (json && json.data && json.data.content) || "";
+        const matches = content.match(/data-pn="([^"]+)"/g) || [];
+        if (matches.length === 0) {
+          console.log(
+            `  [wdj] type=${resourceType} page=${page}: empty, stop`
+          );
+          break;
+        }
+        let added = 0;
+        for (const m of matches) {
+          const pn = m.slice(9, -1);
+          if (pn && !packages.has(pn)) {
+            packages.add(pn);
+            added++;
+          }
+        }
+        console.log(
+          `  [wdj] type=${resourceType} page=${page}: +${added} (total: ${packages.size})`
+        );
+        await sleep(DELAY_MS);
+      } catch (err) {
+        console.error(
+          `  [wdj] type=${resourceType} page=${page}: ERROR - ${err.message}`
+        );
+        await sleep(DELAY_MS * 2);
+      }
+    }
+  }
+
+  console.log(`[Wandoujia] Found ${packages.size} packages`);
+  return [...packages];
+}
+
 async function crawlFDroid() {
   console.log("[F-Droid] Fetching index-v2.json...");
   const url = "https://f-droid.org/repo/index-v2.json";
@@ -1053,9 +1110,10 @@ async function crawlFDroid() {
 async function main() {
   const startTime = Date.now();
 
-  const [gp, fdroidPackages] = await Promise.all([
+  const [gp, fdroidPackages, wandoujiaPackages] = await Promise.all([
     crawlGooglePlay(),
     crawlFDroid(),
+    crawlWandoujia(),
   ]);
   const googlePlayPackages = gp.allPackages;
   const cnPackages = gp.cnPackages;
@@ -1065,14 +1123,16 @@ async function main() {
     ...TARGETED_PACKAGES,
     ...googlePlayPackages,
     ...fdroidPackages,
+    ...wandoujiaPackages,
   ]);
 
   // Mainland China downloadable set used for pre-applying the whitelist:
-  // curated Chinese apps + F-Droid (both directly accessible in CN).
+  // curated Chinese apps + Wandoujia (CN store) + F-Droid (accessible in CN).
   // defaultConfig already applies the whitelist to ALL installed apps, so
   // global Google Play apps are still covered without bloating the scope.
   const cnSet = new Set([
     ...TARGETED_PACKAGES,
+    ...wandoujiaPackages,
     ...fdroidPackages,
   ]);
 
@@ -1092,6 +1152,7 @@ async function main() {
       crawledAt: new Date().toISOString(),
       googlePlayCount: googlePlayPackages.length,
       fdroidCount: fdroidPackages.length,
+      wandoujiaCount: wandoujiaPackages.length,
       cnGooglePlayCount: cnPackages.length,
       targetedCount: TARGETED_PACKAGES.length,
       totalUnique: filtered.length,
@@ -1107,6 +1168,7 @@ async function main() {
     metadata: {
       crawledAt: new Date().toISOString(),
       targetedCount: TARGETED_PACKAGES.length,
+      wandoujiaCount: wandoujiaPackages.length,
       cnGooglePlayCount: cnPackages.length,
       fdroidCount: fdroidPackages.length,
       totalUnique: cnFiltered.length,
@@ -1119,6 +1181,7 @@ async function main() {
   console.log(`\nDone! Saved ${filtered.length} packages to ${OUTPUT_FILE}`);
   console.log(`  Google Play: ${googlePlayPackages.length}`);
   console.log(`  F-Droid: ${fdroidPackages.length}`);
+  console.log(`  Wandoujia: ${wandoujiaPackages.length}`);
   console.log(`  Targeted: ${TARGETED_PACKAGES.length}`);
   console.log(`  Total unique: ${filtered.length}`);
   console.log(`  CN downloadable set: ${cnFiltered.length} -> ${CN_OUTPUT}`);

@@ -42,7 +42,7 @@ jobs:
           tag_name: appstore-presets-latest
           name: "App Store Presets (Daily Update)"
           body: |
-            Automated daily crawl of Google Play Store and F-Droid.
+            Automated daily crawl of Google Play Store, F-Droid and Wandoujia.
             Generated at: ${{ github.event.repository.updated_at }}
           files: |
             tools/crawler/output/hma_oss_import.json
