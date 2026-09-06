@@ -435,6 +435,7 @@ const TARGETED_PACKAGES = [
   "com.haoread.android",          // 好读
   "com.mmbox",                    // 2345浏览器
   "com.wandoujia.phoenix2",       // 豌豆荚
+  "com.coolapk.market",           // 酷安
   "com.pp.assistant",             // PP助手
   // 输入法
   "com.sohu.inputmethod.sogou",   // 搜狗输入法

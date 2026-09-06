@@ -17,7 +17,7 @@
 > **Note:** you must choose Overwrite. With Append, existing on-device configs
 > take precedence and fixes/newly pre-applied apps won't take effect.
 
-After import everything applies automatically: ~6800 mainland apps come
+After import everything applies automatically: ~7800 mainland apps come
 pre-applied with the whitelist template, newly installed apps are covered by
 the default config, and system/launcher packages are excluded so the device
 keeps working normally.
@@ -26,8 +26,8 @@ keeps working normally.
 
 | Metric | Count |
 |--------|-------|
-| Whitelisted packages | ~20,000 |
-| Pre-applied scope apps | ~6,800 |
+| Whitelisted packages | ~21,200 |
+| Pre-applied scope apps | ~7,800 |
 | Built-in CN packages | 900+ |
 | Refresh cadence | Daily (03:00 UTC, automatic) |
 
