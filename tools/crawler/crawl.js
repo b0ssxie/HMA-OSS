@@ -1,4 +1,6 @@
 import gplay from "google-play-scraper";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 
@@ -1210,6 +1212,251 @@ async function crawlXiaomi() {
   return [...packages];
 }
 
+// ---------------------------------------------------------------------------
+// Coolapk (v6 API, v3 X-App-Token)
+//
+// Key material (phase2) is pinned in coolapk_auth.json, extracted once from
+// lib/arm64-v8a/libauth.so of the official APK - the CI never downloads the
+// ~110MB APK. If the API starts rejecting tokens, Coolapk likely rotated its
+// keys: re-extract phase2 from a new APK (see tools/crawler/README.md).
+// $2y$ and $2a$ bcrypt outputs are byte-identical; bcryptjs cannot emit $2y$,
+// so we hash with $2a$ and restore the $2y$ marker before base64 encoding.
+// ---------------------------------------------------------------------------
+const COOLAPK_B64 =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function loadCoolapkAuth() {
+  return JSON.parse(
+    fs.readFileSync(path.join(OUTPUT_DIR, "coolapk_auth.json"), "utf-8")
+  );
+}
+
+function coolapkToken(auth, ts) {
+  const phase2 = Buffer.from(auth.phase2, "base64");
+  const vc = auth.versionCode;
+  const idx = ((ts + vc) % 100) * 4 + 0x80;
+  if (idx + 0x80 > phase2.length) {
+    throw new Error(`coolapk idx out of range: ${idx}`);
+  }
+  const chunk = phase2.subarray(idx, idx + 0x80);
+  const segment = Buffer.from(chunk.toString("latin1"), "base64");
+  const md5dev = crypto
+    .createHash("md5")
+    .update(auth.device, "utf8")
+    .digest("hex");
+  const plain = Buffer.concat([
+    Buffer.from(auth.package, "ascii"),
+    Buffer.from("&"),
+    segment,
+    Buffer.from("&"),
+    Buffer.from(md5dev, "ascii"),
+    Buffer.from("&"),
+    Buffer.from(String(ts), "ascii"),
+    Buffer.from("&"),
+    Buffer.from(String(vc), "ascii"),
+  ]);
+  const pw = crypto.createHash("md5").update(plain.toString("base64")).digest("hex");
+  const md5plain = crypto.createHash("md5").update(plain).digest("hex");
+  const saltSrc = Buffer.from(ts.toString(16) + "/" + md5plain, "ascii")
+    .toString("base64")
+    .replace(/=+$/, "");
+  let s22 = saltSrc.slice(0, 22);
+  const li = COOLAPK_B64.indexOf(s22[21]);
+  s22 = s22.slice(0, 21) + COOLAPK_B64[(li - 5 + 64) % 64];
+  const hashed = bcrypt.hashSync(pw, "$2a$10$" + s22);
+  return (
+    "v3" +
+    Buffer.from("$2y$" + hashed.slice(4), "ascii")
+      .toString("base64")
+      .replace(/=+$/, "")
+  );
+}
+
+function coolapkHeaders(auth, token) {
+  return {
+    "User-Agent": auth.userAgent,
+    "X-Requested-With": "XMLHttpRequest",
+    "X-Sdk-Int": "35",
+    "X-Sdk-Locale": "zh-CN",
+    "X-App-Id": "com.coolapk.market",
+    "X-App-Token": token,
+    "X-App-Version": auth.appVersion,
+    "X-App-Code": String(auth.versionCode),
+    "X-Api-Version": "16",
+    "X-App-Device": auth.device,
+    "X-Dark-Mode": "0",
+    "X-App-Channel": "coolapk",
+    "X-App-Mode": "universal",
+    "X-App-Supported": String(auth.versionCode),
+  };
+}
+
+// Package names appear as "packageName" fields and coolmarket:///apk/ URLs.
+function extractCoolapkPackages(text, packages) {
+  let added = 0;
+  const patterns = [
+    /"packageName"\s*:\s*"([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)"/g,
+    /coolmarket:\/\/apk\/([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)/g,
+    /coolapk\.com\/apk\/([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)/g,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (!packages.has(m[1])) {
+        packages.add(m[1]);
+        added++;
+      }
+    }
+  }
+  return added;
+}
+
+async function crawlCoolapk() {
+  console.log("[Coolapk] Starting crawl...");
+  const packages = new Set();
+
+  let auth;
+  try {
+    auth = loadCoolapkAuth();
+  } catch (err) {
+    console.log(`[Coolapk] cannot load coolapk_auth.json (${err.message}), skip source`);
+    return [];
+  }
+
+  // pyca/bcrypt rejects some salts from the app algorithm; try a small
+  // forward timestamp window like the reference implementation.
+  const startTs = Math.floor(Date.now() / 1000);
+  let token = null;
+  let saltErr = null;
+  for (let off = 0; off <= 10; off++) {
+    try {
+      token = coolapkToken(auth, startTs + off);
+      saltErr = null;
+      break;
+    } catch (err) {
+      saltErr = err;
+    }
+  }
+  if (!token) {
+    console.log(`[Coolapk] token generation failed (${saltErr?.message}), skip source`);
+    return [];
+  }
+  const headers = coolapkHeaders(auth, token);
+
+  const fetchText = async (url) => {
+    const res = await fetch(url, { headers });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+    }
+    let status = null;
+    try {
+      status = JSON.parse(text).status;
+    } catch {
+      // non-JSON: treat as fatal for this source
+    }
+    if (status !== 1) {
+      throw new Error(`api status=${status}: ${text.slice(0, 160)}`);
+    }
+    return text;
+  };
+
+  const MAX_CONSECUTIVE_ERRORS = 3;
+  let consecutiveErrors = 0;
+  let aborted = false;
+  let tokenRejected = false;
+  const recordError = (where, err) => {
+    const msg = err.message || String(err);
+    if (/HTTP 40[13]|api status=0|token/i.test(msg) && !tokenRejected) {
+      tokenRejected = true;
+      console.log(
+        `[Coolapk] TOKEN REJECTED (${where}: ${msg}). ` +
+          `Coolapk likely rotated keys - re-extract phase2 from a new APK (see tools/crawler/README.md). Aborting source.`
+      );
+      aborted = true;
+      return;
+    }
+    console.error(`  [coolapk] ${where}: ERROR - ${msg}`);
+    if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+      console.log(`[Coolapk] ${consecutiveErrors} consecutive errors, aborting source`);
+      aborted = true;
+    }
+  };
+
+  // 1) Hot ranking feeds (contain apk cards)
+  const RANKING_PAGES = 10;
+  for (let page = 1; page <= RANKING_PAGES && !aborted; page++) {
+    try {
+      const text = await fetchText(
+        `https://api.coolapk.com/v6/page/dataList?url=V9_HOME_TAB_RANKING&page=${page}`
+      );
+      consecutiveErrors = 0;
+      const added = extractCoolapkPackages(text, packages);
+      console.log(`  [coolapk] ranking page=${page}: +${added} (total: ${packages.size})`);
+      await sleep(DELAY_MS);
+    } catch (err) {
+      recordError(`ranking page=${page}`, err);
+      if (!aborted) await sleep(DELAY_MS * 2);
+    }
+  }
+
+  // 2) App search over common keywords (bulk apk entities)
+  if (!aborted) {
+    const SEARCH_PATHS = ["/v6/search/apk", "/v6/search?type=apk"];
+    let searchPath = null;
+    for (const p of SEARCH_PATHS) {
+      if (aborted) break;
+      try {
+        const sep = p.includes("?") ? "&" : "?";
+        const text = await fetchText(
+          `https://api.coolapk.com${p}${sep}keyword=${encodeURIComponent("微信")}&page=1`
+        );
+        consecutiveErrors = 0;
+        searchPath = p;
+        const added = extractCoolapkPackages(text, packages);
+        console.log(`  [coolapk] search path OK: ${p} (+${added})`);
+        break;
+      } catch (err) {
+        if (tokenRejected || aborted) break;
+        console.log(`  [coolapk] search probe ${p} failed (${err.message}), try next`);
+      }
+    }
+    if (searchPath && !aborted) {
+      const KEYWORDS = [
+        ... "abcdefghijklmnopqrstuvwxyz".split(""),
+        "微信", "支付宝", "淘宝", "抖音", "美团", "拼多多", "京东",
+        "银行", "输入法", "浏览器", "音乐", "视频", "地图", "相机", "笔记",
+      ];
+      const sep = searchPath.includes("?") ? "&" : "?";
+      for (const kw of KEYWORDS) {
+        if (aborted) break;
+        for (let page = 1; page <= 2 && !aborted; page++) {
+          try {
+            const text = await fetchText(
+              `https://api.coolapk.com${searchPath}${sep}keyword=${encodeURIComponent(kw)}&page=${page}`
+            );
+            consecutiveErrors = 0;
+            const added = extractCoolapkPackages(text, packages);
+            if (added > 0 || page === 1) {
+              console.log(
+                `  [coolapk] search kw=${kw} page=${page}: +${added} (total: ${packages.size})`
+              );
+            }
+            await sleep(DELAY_MS);
+          } catch (err) {
+            recordError(`search kw=${kw} page=${page}`, err);
+            if (!aborted) await sleep(DELAY_MS * 2);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  console.log(`[Coolapk] Found ${packages.size} packages`);
+  return [...packages];
+}
+
 async function crawlFDroid() {
   console.log("[F-Droid] Fetching index-v2.json...");
   const url = "https://f-droid.org/repo/index-v2.json";
@@ -1231,12 +1478,13 @@ async function crawlFDroid() {
 async function main() {
   const startTime = Date.now();
 
-  const [gp, fdroidPackages, wandoujiaPackages, xiaomiPackages] =
+  const [gp, fdroidPackages, wandoujiaPackages, xiaomiPackages, coolapkPackages] =
     await Promise.all([
       crawlGooglePlay(),
       crawlFDroid(),
       crawlWandoujia(),
       crawlXiaomi(),
+      crawlCoolapk(),
     ]);
   const googlePlayPackages = gp.allPackages;
   const cnPackages = gp.cnPackages;
@@ -1248,6 +1496,7 @@ async function main() {
     ...fdroidPackages,
     ...wandoujiaPackages,
     ...xiaomiPackages,
+    ...coolapkPackages,
   ]);
 
   // Mainland China downloadable set used for pre-applying the whitelist:
@@ -1258,6 +1507,7 @@ async function main() {
     ...TARGETED_PACKAGES,
     ...wandoujiaPackages,
     ...xiaomiPackages,
+    ...coolapkPackages,
     ...fdroidPackages,
   ]);
 
@@ -1279,6 +1529,7 @@ async function main() {
       fdroidCount: fdroidPackages.length,
       wandoujiaCount: wandoujiaPackages.length,
       xiaomiCount: xiaomiPackages.length,
+      coolapkCount: coolapkPackages.length,
       cnGooglePlayCount: cnPackages.length,
       targetedCount: TARGETED_PACKAGES.length,
       totalUnique: filtered.length,
@@ -1296,6 +1547,7 @@ async function main() {
       targetedCount: TARGETED_PACKAGES.length,
       wandoujiaCount: wandoujiaPackages.length,
       xiaomiCount: xiaomiPackages.length,
+      coolapkCount: coolapkPackages.length,
       cnGooglePlayCount: cnPackages.length,
       fdroidCount: fdroidPackages.length,
       totalUnique: cnFiltered.length,
@@ -1310,6 +1562,7 @@ async function main() {
   console.log(`  F-Droid: ${fdroidPackages.length}`);
   console.log(`  Wandoujia: ${wandoujiaPackages.length}`);
   console.log(`  Xiaomi: ${xiaomiPackages.length}`);
+  console.log(`  Coolapk: ${coolapkPackages.length}`);
   console.log(`  Targeted: ${TARGETED_PACKAGES.length}`);
   console.log(`  Total unique: ${filtered.length}`);
   console.log(`  CN downloadable set: ${cnFiltered.length} -> ${CN_OUTPUT}`);

@@ -9,6 +9,7 @@
     "all": "node crawl.js && node generate-preset.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "google-play-scraper": "^10.1.2"
   }
 }

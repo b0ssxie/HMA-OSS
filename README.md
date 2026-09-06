@@ -79,6 +79,7 @@
 | Google Play（美/日/德/中） | 是 | 各分类 Top 免费应用 |
 | F-Droid | 是 | 全部开源应用 |
 | 小米应用商店 | 是 | 各分类热门应用（含腾讯系游戏） |
+| 酷安 | 是 | 热榜 + 应用搜索（v3 token 密钥固化在仓库，APP 换密钥需重新提取） |
 | 豌豆荚 | 否（CI 被屏蔽） | 屏蔽机房 IP，大陆本地运行可用 |
 | 应用宝 | 否（已废） | 官网改版为 SPA + 反爬，无包名可抓 |
 | 内置名单 | 是 | 900+ 国产应用（微信/支付宝/银行/游戏等） |
@@ -95,7 +96,7 @@ npm run all
 
 | 命令 | 说明 |
 |------|------|
-| `npm run crawl` | 爬取 Google Play + F-Droid + 豌豆荚 + 小米商店 |
+| `npm run crawl` | 爬取 Google Play + F-Droid + 豌豆荚 + 小米 + 酷安 |
 | `npm run generate` | 从爬取数据生成 HMA-OSS 预设 |
 | `npm run all` | 执行上述两步 |
 | `node push-preset.js` | 通过 adb 推送预设到手机 |

@@ -38,6 +38,7 @@ keeps working normally.
 | Google Play (us/jp/de/cn) | Yes | Top free apps per category |
 | F-Droid | Yes | All open-source apps |
 | Xiaomi App Store | Yes | Popular apps per category (incl. Tencent games) |
+| Coolapk | Yes | Ranking + app search via v6 API (pinned v3 token keys, see below) |
 | Wandoujia | No (IP-blocked in CI) | Blocks datacenter IPs; works from mainland networks |
 | MyApp (Tencent) | No (dead) | Site rebuilt as SPA with anti-scraping; no package names served |
 | Built-in list | Yes | 900+ CN apps (WeChat/Alipay/banks/games) |
@@ -56,7 +57,7 @@ Output files will be in `tools/crawler/output/`.
 
 | Command | Description |
 |---------|-------------|
-| `npm run crawl` | Crawl Google Play + F-Droid + Wandoujia + Xiaomi stores |
+| `npm run crawl` | Crawl Google Play + F-Droid + Wandoujia + Xiaomi + Coolapk |
 | `npm run generate` | Generate HMA-OSS preset from crawled data |
 | `npm run all` | Run both steps |
 | `node push-preset.js` | Push preset to connected device via adb |
@@ -102,6 +103,25 @@ Detector preset packages are additionally added to the scope explicitly:
 HMA's `defaultConfig` only auto-applies to newly installed apps, and
 `shouldHide()` lets callers outside the explicit scope through, so
 previously installed detectors need explicit scope entries to be filtered.
+
+## Coolapk Token Keys
+
+`crawl.js` talks to Coolapk's v6 API (`api.coolapk.com`) with a v3
+`X-App-Token`, reimplemented in Node from the app's own algorithm
+(md5/base64/xor key schedule + bcrypt; `$2y$`/`$2a$` outputs are
+byte-identical). The only secret input is `phase2`, pinned in
+`coolapk_auth.json` (currently Coolapk 16.6.1 / versionCode 2609062) —
+the CI never downloads the ~110MB APK.
+
+If the crawl log shows `TOKEN REJECTED`, Coolapk rotated its keys:
+1. Download the latest official APK (e.g. via the 应用宝 direct link:
+   `android.myapp.com/myapp/detail.htm?apkName=com.coolapk.market` SSR
+   contains a permanent `imtt.dd.qq.com/...apk` URL).
+2. Extract `lib/arm64-v8a/libauth.so`, find the base64 blob (≥1000 chars)
+   whose xor-`0x5A` decode is most printable, save that xor output as
+   base64 into `coolapk_auth.json`'s `phase2`, and bump `appVersion` /
+   `versionCode` / `userAgent` to match.
+3. Re-run. The source fail-softs (returns empty, other sources unaffected).
 
 ## GitHub Actions
 
