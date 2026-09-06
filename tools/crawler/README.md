@@ -1,12 +1,48 @@
 # App Store Crawler
 
-Crawls Google Play Store, F-Droid, Wandoujia (豌豆荚) and Xiaomi App Store (小米应用商店, CN stores) to generate a whitelist preset for HMA-OSS.
+> Daily-updated clean-device simulation: crawls package names of legitimate apps
+> from major app stores and generates a whitelist preset for HMA-OSS.
+> Once applied, target apps only see store-available apps — never root-related ones.
 
-## Purpose
+[![App Store Crawler](https://img.shields.io/github/actions/workflow/status/b0ssxie/HMA-OSS/appstore-crawler.yml?label=appstore-crawler&logo=github)](https://github.com/b0ssxie/HMA-OSS/actions/workflows/appstore-crawler.yml)
 
-The preset contains package names of legitimate apps available on official app stores. When applied as a whitelist in HMA-OSS, only these apps are visible to target apps, making your device appear as a clean, unrooted phone.
+## Quick Start (1 minute)
 
-## Quick Start
+| Step | Action |
+|------|--------|
+| 1 | Download `hma_oss_import.json` from Releases (`appstore-presets-latest`) |
+| 2 | HMA-OSS Home -> Restore config -> select the file |
+| 3 | Choose **Overwrite** -> done |
+
+> **Note:** you must choose Overwrite. With Append, existing on-device configs
+> take precedence and fixes/newly pre-applied apps won't take effect.
+
+After import everything applies automatically: ~6800 mainland apps come
+pre-applied with the whitelist template, newly installed apps are covered by
+the default config, and system/launcher packages are excluded so the device
+keeps working normally.
+
+## Current Scale
+
+| Metric | Count |
+|--------|-------|
+| Whitelisted packages | ~20,000 |
+| Pre-applied scope apps | ~6,800 |
+| Built-in CN packages | 900+ |
+| Refresh cadence | Daily (03:00 UTC, automatic) |
+
+## Source Status
+
+| Source | Works in CI | Notes |
+|--------|-------------|-------|
+| Google Play (us/jp/de/cn) | Yes | Top free apps per category |
+| F-Droid | Yes | All open-source apps |
+| Xiaomi App Store | Yes | Popular apps per category (incl. Tencent games) |
+| Wandoujia | No (IP-blocked in CI) | Blocks datacenter IPs; works from mainland networks |
+| MyApp (Tencent) | No (dead) | Site rebuilt as SPA with anti-scraping; no package names served |
+| Built-in list | Yes | 900+ CN apps (WeChat/Alipay/banks/games) |
+
+## Local Run
 
 ```bash
 cd tools/crawler
@@ -61,10 +97,8 @@ Download from: **Releases** -> `appstore-presets-latest`
 
 ### Method 1: Direct import (Recommended)
 
-1. Download `hma_oss_import.json` from Releases (`appstore-presets-latest`)
-2. In HMA-OSS: Home -> Restore config -> select the file
-3. You must choose **Overwrite** ⚠️: with Append, existing on-device configs take precedence (`putIfAbsent`), so fixes and newly pre-applied apps won't take effect
-4. The `App Store Whitelist` template is imported and already pre-applied to ~6800 mainland apps + default config for newly installed apps; system/OEM packages are excluded so the launcher keeps working
+See Quick Start above — three steps. The `App Store Whitelist` template is
+imported along with the file, no per-app manual work needed.
 
 ### Method 2: Push via adb
 
@@ -91,3 +125,20 @@ Edit `crawl.js` to:
 Edit `generate-preset.js` to:
 - Modify `COMMON_PACKAGES` (Android system packages always present)
 - Change category keyword matching logic
+
+## FAQ
+
+**Overwrite or Append on restore?**
+Overwrite. Append keeps existing on-device configs, so fixes never apply.
+
+**Launcher/gestures broken after import?**
+That was caused by system apps in the scope in an old build — already fixed.
+Re-download the latest file and import with Overwrite.
+
+**A CN app is not pre-applied?**
+File an issue with its package name (visible in the HMA app details page),
+or add it to `TARGETED_PACKAGES` in `crawl.js` and open a PR.
+
+**Why is there no Wandoujia data?**
+Wandoujia blocks GitHub datacenter IPs. Run `npm run all` from a mainland
+China network to include it.
