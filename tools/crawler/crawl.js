@@ -896,6 +896,91 @@ const TARGETED_PACKAGES = [
   "com.xiaomi.wifipassword",        // 小米WiFi密码
   "com.xiaomi.mi_connect_service",  // 小米互联服务
   "com.xiaomi.mi_cool",             // 小米
+  // 热门游戏 (专有包名, 应用商店爬不到)
+  "com.tencent.tmgp.sgame",         // 王者荣耀
+  "com.tencent.tmgp.pubgmhd",       // 和平精英
+  "com.tencent.tmgp.pubg",          // PUBG Mobile
+  "com.tencent.tmgp.cod",           // 使命召唤手游
+  "com.tencent.tmgp.cf",            // 穿越火线手游
+  "com.tencent.tmgp.speedmobile",   // QQ飞车手游
+  "com.tencent.tmgp.jx3",           // 剑侠情缘
+  "com.tencent.tmgp.dnf",           // 地下城与勇士手游
+  "com.tencent.tmgp.naruto",        // 火影忍者手游
+  "com.miHoYo.Yuanshen",            // 原神
+  "com.mihoyo.hkrpg",               // 崩坏星穹铁道
+  "com.mihoyo.bh3",                 // 崩坏3
+  "com.mihoyo.zzz",                 // 绝区零
+  "com.netease.mc",                 // 我的世界 (已有, 去重无害)
+  "com.netease.id5",                // 第五人格
+  "com.netease.yys",                // 阴阳师
+  "com.netease.mrzh",               // 明日之后
+  "com.netease.qnm",                // 倩女幽魂手游
+  "com.netease.tx2",                // 天谕
+  "com.netease.hyxd",               // 荒野行动
+  "com.hypergryph.arknights",       // 明日方舟
+  "com.leiting.lostlight",          // 萤火突击
+  "com.tencent.lolm",               // 英雄联盟手游
+  "com.tencent.tmgp.gnyxz",         // 光与夜之恋
+  "com.papegames.lysk",             // 恋与深空
+  // 社区/内容 (专有包名补充)
+  "com.douban.frodo",               // 豆瓣
+  "com.ximalaya.ting.android",      // 喜马拉雅
+  "com.ximalaya.ting.lite",         // 喜马拉雅极速版
+  "com.ifeng.news",                 // 凤凰新闻
+  "com.sohu.newsapp",               // 搜狐新闻
+  "com.sohu.newsclient",            // 搜狐新闻客户端
+  "com.tencent.news",               // 腾讯新闻 (已有, 去重无害)
+  // 办公/效率
+  "com.wps.moffice",                // WPS Office
+  "com.wps.moffice.eng",            // WPS Office英文版
+  "com.tencent.wework",             // 企业微信
+  "com.alibaba.android.rimet",      // 钉钉 (已有, 去重无害)
+  "com.ss.android.lark",            // 飞书 (已有, 去重无害)
+  "com.tencent.docs",               // 腾讯文档 (已有, 去重无害)
+  "com.tencent.weread",             // 微信读书 (已有, 去重无害)
+  "com.youdao.note",                // 有道云笔记 (已有, 去重无害)
+  // 安全/工具
+  "com.qihoo360.mobilesafe",        // 360手机卫士
+  "com.qihoo.appstore",             // 360手机助手
+  "com.tencent.qqpimsecure",        // 腾讯手机管家
+  "com.cleanmaster.mguard",         // 猎豹清理大师
+  "com.lbe.security",               // LBE安全大师
+  "com.ijinshan.kbatterydoctor",    // 金山电池医生
+  // 电商补充
+  "com.achievo.vipshop",            // 唯品会
+  "com.netease.kaola",              // 网易考拉/考拉海购
+  "com.mogujie",                    // 蘑菇街
+  "com.meilishuo",                  // 美丽说
+  "com.jumei",                      // 聚美优品
+  "com.vmall.client",               // 华为商城
+  "com.huawei.himovie",             // 华为视频
+  "com.huawei.music",               // 华为音乐
+  "com.huawei.reader",              // 华为阅读
+  // 出行/生活补充
+  "com.sdu.didi.psnger",            // 滴滴出行 (已有, 去重无害)
+  "com.didapinche",                 // 嘀嗒出行
+  "com.hellobike",                  // 哈啰出行
+  "com.qingju",                     // 青桔单车
+  "com.meituan.motorbike",          // 美团单车
+  "com.ofo",                        // ofo小黄车
+  "com.mobike",                     // 摩拜单车
+  "com.flightmanager.view",         // 航班管家 (已有, 去重无害)
+  "com.variflight",                 // 飞常准
+  "com.trip",                       // Trip.com
+  "com.tongcheng.android",          // 同程旅行 (已有, 去重无害)
+  "com.lvmama.android",             // 驴妈妈 (已有, 去重无害)
+  "com.mfw.roadbook",               // 马蜂窝 (已有, 去重无害)
+  // 金融补充
+  "com.lufax.android",              // 陆金所
+  "com.jd.jrbank",                  // 京东金融
+  "com.jd.jrapp",                   // 京东金融 (已有, 去重无害)
+  "com.tianhong.fund",              // 天弘基金
+  "com.chinaamc",                   // 华夏基金
+  "com.efund",                      // 易方达
+  "com.gffunds",                    // 广发基金
+  "com.jsfund",                     // 嘉实基金
+  "com.syf",                        // 蚂蚁财富
+  "com.tencent.licai",              // 腾讯理财通
 ];
 
 async function crawlGooglePlay() {
