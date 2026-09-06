@@ -13,6 +13,27 @@ const DELAY_MS = 500;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Run `worker(item)` over `items` with a fixed concurrency pool. Results
+// are returned in input order; errors propagate to the per-item slot as
+// {item, error} so the caller can decide how to log/retry.
+async function runConcurrent(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      try {
+        results[i] = { item: items[i], value: await worker(items[i], i) };
+      } catch (err) {
+        results[i] = { item: items[i], error: err };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 const TARGETED_PACKAGES = [
   // Google core
   "com.google.android.gms",
@@ -997,41 +1018,64 @@ async function crawlGooglePlay() {
   const cnPackages = new Set();
   const categories = Object.values(gplay.category);
 
+  // Build all (country, category) tasks upfront; run with a fixed
+  // concurrency pool. ~240 tasks at 500ms / 4 = ~30s vs ~2 min serial.
+  const tasks = [];
   for (const country of COUNTRIES) {
-    console.log(`[Google Play] Crawling country: ${country}`);
-
     for (const category of categories) {
-      try {
-        const apps = await gplay.list({
-          category,
-          collection: gplay.collection.TOP_FREE,
-          num: TOP_N_PER_CATEGORY,
-          country,
-          lang: "en",
-        });
+      tasks.push({ country, category });
+    }
+  }
+  const GP_CONCURRENCY = 4;
+  console.log(
+    `[Google Play] ${tasks.length} tasks (${COUNTRIES.length} countries x ${categories.length} categories), concurrency=${GP_CONCURRENCY}`
+  );
 
-        for (const app of apps) {
-          allPackages.add(app.appId);
-          if (country === "cn") {
-            cnPackages.add(app.appId);
-          }
-        }
+  // Track per-country results so the final per-country summary stays.
+  const perCountryTotals = Object.fromEntries(COUNTRIES.map((c) => [c, 0]));
 
-        console.log(
-          `  [${country}] ${category}: +${apps.length} apps (total: ${allPackages.size})`
-        );
-        await sleep(DELAY_MS);
-      } catch (err) {
-        if (err.message && err.message.includes("Could not")) {
-          // Category not available in this country, skip
-        } else {
-          console.error(
-            `  [${country}] ${category}: ERROR - ${err.message}`
-          );
-        }
-        await sleep(DELAY_MS * 2);
+  const fetchOne = async ({ country, category }) => {
+    const apps = await gplay.list({
+      category,
+      collection: gplay.collection.TOP_FREE,
+      num: TOP_N_PER_CATEGORY,
+      country,
+      lang: "en",
+    });
+    return { country, category, apps };
+  };
+
+  const results = await runConcurrent(tasks, GP_CONCURRENCY, fetchOne);
+
+  for (const { item, value, error } of results) {
+    if (error) {
+      // "Could not ..." = category unavailable in this country, skip silently.
+      // Anything else: log once. (Network errors still get the longer delay.)
+      if (!(error.message && error.message.includes("Could not"))) {
+        console.error(`  [${item.country}] ${item.category}: ERROR - ${error.message}`);
+      }
+      continue;
+    }
+    const { country, category, apps } = value;
+    for (const app of apps) {
+      allPackages.add(app.appId);
+      if (country === "cn") {
+        cnPackages.add(app.appId);
       }
     }
+    perCountryTotals[country] += apps.length;
+    console.log(
+      `  [${country}] ${category}: +${apps.length} apps (total: ${allPackages.size})`
+    );
+    // Per-task politeness delay (inside worker = after the network call).
+    // Short of this, the burst can look like a single client hammering.
+    await sleep(DELAY_MS);
+  }
+
+  for (const country of COUNTRIES) {
+    console.log(
+      `[Google Play] ${country} done: +${perCountryTotals[country]} apps`
+    );
   }
 
   return {
