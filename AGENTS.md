@@ -43,6 +43,8 @@ npm run all        # both
 
 Sources: Google Play, F-Droid, Xiaomi, Coolapk (CI-available); Wandoujia (IP-blocked in CI, works from mainland); built-in 900+ CN packages. Each source fail-softs — Wandoujia/Coolapk abort independently without failing the run.
 
+**Concurrency**: `crawl.js` has a generic `runConcurrent(items, n, worker)` pool. Google Play uses it with `GP_CONCURRENCY = 4`; the 500ms politeness `sleep` must stay **inside** the worker (gates fetch rate at ~8 RPS). A post-loop sleep would serialize result logging without throttling fetches. The `"Could not"` string-match in the error path silently skips categories unavailable in a country — don't remove it, but don't widen it to swallow network errors either.
+
 **Coolapk auth**: v3 `X-App-Token` reimplemented in pure JS (`bcryptjs`, not `bcrypt`). Secret key (`phase2`) is pinned in `coolapk_auth.json`, extracted once from `lib/arm64-v8a/libauth.so`. CI never downloads the APK. If the log shows `TOKEN REJECTED`, Coolapk rotated keys — re-extract from a new APK (see `tools/crawler/README.md`).
 
 **Preset generation**: `generate-preset.js` parses `exactPackageNames` from the 7 `app_presets/*.kt` files and mirrors their prefix/suffix rules. Matching packages are removed from the visible whitelist. Detector preset packages are additionally added to scope explicitly (see runtime behavior above).
@@ -50,6 +52,10 @@ Sources: Google Play, F-Droid, Xiaomi, Coolapk (CI-available); Wandoujia (IP-blo
 Output: `hma_oss_import.json` (direct import), `appstore_whitelist_preset.json`, `appstore_packages.json`, `packages_cn.json`, `excluded_preset_packages.json`.
 
 CI: `.github/workflows/appstore-crawler.yml` runs daily at 03:00 UTC, publishes to `appstore-presets-latest` release. There is **no CI for the Android build itself**.
+
+### Verifying crawler changes
+
+No local Node.js in some dev environments. To verify, commit + push and trigger manually (`gh workflow run appstore-crawler.yml`), then check the log for `"Coolapk: N"`, `"Total unique: N"`, `"Excluded N"`. If the release-upload step fails with a GitHub `Server Error` while artifacts uploaded fine, rerun failed jobs (`gh run rerun <id> --failed`) — it's a transient GitHub-side issue, not a crawler bug.
 
 ## No Tests / Lint / Typecheck
 
